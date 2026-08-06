@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+
 	"github.com/trunglq04/goride/services/api-gateway/grpc_clients"
 	"github.com/trunglq04/goride/shared/contracts"
 
@@ -33,7 +34,6 @@ func handleTripPreview(c *gin.Context) {
 	// avoid resource leaks
 	defer tripService.Close()
 
-	// TODO: Call trip service
 	// resp, err := http.Post("http://trip-service:8083/preview", "application/json", reader)
 	tripPreview, err := tripService.Client.PreviewTrip(c, reqBody.toProto())
 	if err != nil {

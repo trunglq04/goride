@@ -22,8 +22,7 @@ local_resource(
 
 
 docker_build_with_restart(
-  'github.com/trunglq04/goride
-/api-gateway',
+  'github.com/trunglq04/goride/api-gateway',
   '.',
   entrypoint=['/app/build/api-gateway'],
   dockerfile='./infra/development/docker/api-gateway.Dockerfile',
@@ -55,8 +54,7 @@ local_resource(
   deps=['./services/trip-service', './shared'], labels="compiles")
 
 docker_build_with_restart(
-  'github.com/trunglq04/goride
-/trip-service',
+  'github.com/trunglq04/goride/trip-service',
   '.',
   entrypoint=['/app/build/trip-service'],
   dockerfile='./infra/development/docker/trip-service.Dockerfile',
@@ -77,8 +75,7 @@ k8s_resource('trip-service', resource_deps=['trip-service-compile'], labels="ser
 ### Web Frontend ###
 
 docker_build(
-  'github.com/trunglq04/goride
-/web',
+  'github.com/trunglq04/goride/web',
   '.',
   dockerfile='./infra/development/docker/web.Dockerfile',
 )

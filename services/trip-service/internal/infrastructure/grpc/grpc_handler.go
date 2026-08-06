@@ -27,27 +27,38 @@ func NewGRPCHandler(server *grpc.Server, service domain.TripService) *gRPCHanler
 	return handler
 }
 
+func (h *gRPCHanler) CreateTrip(ctx context.Context, req *pb.)
+
+
 func (h *gRPCHanler) PreviewTrip(ctx context.Context, rq *pb.PreviewTripRequest) (*pb.PreviewTripResponse, error) {
-	pickup := rq.GetStartLocation()
-	destination := rq.GetEndLocation()
+	pbPickup := rq.GetStartLocation()
+	pbDestination := rq.GetEndLocation()
 
-	pickupCoord := &types.Coordinate{
-		Latitude:  pickup.Latitude,
-		Longitude: pickup.Longitude,
+	pickup := &types.Coordinate{
+		Latitude:  pbPickup.Latitude,
+		Longitude: pbPickup.Longitude,
 	}
-	destinationCoord := &types.Coordinate{
-		Latitude:  destination.Latitude,
-		Longitude: destination.Longitude,
+	destination := &types.Coordinate{
+		Latitude:  pbDestination.Latitude,
+		Longitude: pbDestination.Longitude,
 	}
 
-	r, err := h.service.GetRoute(ctx, pickupCoord, destinationCoord, true)
+	r, err := h.service.GetRoute(ctx, pickup, destination, true)
 	if err != nil {
 		log.Println(err)
 		return nil, status.Errorf(codes.Internal, "failed to get route: %v", err)
 	}
 
+	// 1. Estimate the ride fares prices based on the route (ex: distance)
+	estimatedFares := h.service.EstimatePackagesPriceWithRoute(r)
+	// 2. Store the ride fares for the create trip to fetch and validate
+	fares, err := h.service.GenerateTripFares(ctx, estimatedFares, rq.UserID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get route: %v", err)
+	}
+
 	return &pb.PreviewTripResponse{
 		Route:     r.ToProto(),
-		RideFares: []*pb.RideFare{},
+		RideFares: domain.ToRideFaresProto(fares),
 	}, nil
 }

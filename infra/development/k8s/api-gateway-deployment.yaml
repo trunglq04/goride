@@ -14,8 +14,7 @@ spec:
     spec:
       containers:
         - name: api-gateway
-          image: github.com/trunglq04/goride
-/api-gateway
+          image: github.com/trunglq04/goride/api-gateway
           ports:
             - containerPort: 8081
           resources:

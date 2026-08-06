@@ -6,10 +6,11 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"syscall"
+
 	"github.com/trunglq04/goride/services/trip-service/internal/infrastructure/grpc"
 	"github.com/trunglq04/goride/services/trip-service/internal/infrastructure/repository"
 	"github.com/trunglq04/goride/services/trip-service/internal/service"
-	"syscall"
 
 	grpcserver "google.golang.org/grpc"
 )

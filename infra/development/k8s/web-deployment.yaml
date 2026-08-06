@@ -16,8 +16,7 @@ spec:
     spec:
       containers:
       - name: web
-        image: github.com/trunglq04/goride
-/web
+        image: github.com/trunglq04/goride/web
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
