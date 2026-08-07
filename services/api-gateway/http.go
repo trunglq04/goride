@@ -10,6 +10,33 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func handleTripStart(c *gin.Context) {
+	var reqBody startTripRequest
+	if err := c.ShouldBindBodyWithJSON(&reqBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to parse JSON data"})
+		return
+	}
+
+	tripService, err := grpc_clients.NewTripServiceClient()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer tripService.Close()
+
+	tripStart, err := tripService.Client.CreateTrip(c, reqBody.toProto())
+	if err != nil {
+		log.Print(err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to call trip start"})
+		return
+	}
+
+	response := contracts.APIResponse{Data: tripStart}
+
+	c.JSON(http.StatusCreated, response)
+
+}
+
 func handleTripPreview(c *gin.Context) {
 	var reqBody previewTripRequest
 	if err := c.ShouldBindJSON(&reqBody); err != nil {
@@ -38,7 +65,7 @@ func handleTripPreview(c *gin.Context) {
 	tripPreview, err := tripService.Client.PreviewTrip(c, reqBody.toProto())
 	if err != nil {
 		log.Print(err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to call trip service"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to call trip preview"})
 		return
 	}
 

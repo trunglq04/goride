@@ -25,7 +25,9 @@ func main() {
 	router := gin.Default()
 	router.Use(enableCORS())
 
-	router.POST("/trip/preview", handleTripPreview)
+	trip := router.Group("/trip")
+	trip.POST("/preview", handleTripPreview)
+	trip.POST("/start", handleTripStart)
 
 	ws := router.Group("/ws")
 	ws.GET("/drivers", handleDriversWebSocket)

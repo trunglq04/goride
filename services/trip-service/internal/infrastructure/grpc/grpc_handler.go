@@ -27,8 +27,28 @@ func NewGRPCHandler(server *grpc.Server, service domain.TripService) *gRPCHanler
 	return handler
 }
 
-func (h *gRPCHanler) CreateTrip(ctx context.Context, req *pb.)
+func (h *gRPCHanler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest) (*pb.CreateTripResponse, error) {
+	// 1. Fetch and validate the fare.
+	fareID := req.GetRideFareID()
+	userID := req.GetUserID()
 
+	rideFare, err := h.service.GetAndValidateFare(ctx, fareID, userID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to validate fare: %v", err)
+	}
+
+	// 2. Call create trip.
+	trip, err := h.service.CreateTrip(ctx, rideFare)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create trip: %v", err)
+	}
+	// 3. Initialize an empty driver to the trip.
+	// 4. Add comment at the end of the func to publish an event on the Async Comms module
+
+	return &pb.CreateTripResponse{
+		TripID: trip.ID.Hex(),
+	}, nil
+}
 
 func (h *gRPCHanler) PreviewTrip(ctx context.Context, rq *pb.PreviewTripRequest) (*pb.PreviewTripResponse, error) {
 	pbPickup := rq.GetStartLocation()
@@ -43,22 +63,22 @@ func (h *gRPCHanler) PreviewTrip(ctx context.Context, rq *pb.PreviewTripRequest)
 		Longitude: pbDestination.Longitude,
 	}
 
-	r, err := h.service.GetRoute(ctx, pickup, destination, true)
+	route, err := h.service.GetRoute(ctx, pickup, destination, true)
 	if err != nil {
 		log.Println(err)
 		return nil, status.Errorf(codes.Internal, "failed to get route: %v", err)
 	}
 
 	// 1. Estimate the ride fares prices based on the route (ex: distance)
-	estimatedFares := h.service.EstimatePackagesPriceWithRoute(r)
+	estimatedFares := h.service.EstimatePackagesPriceWithRoute(route)
 	// 2. Store the ride fares for the create trip to fetch and validate
-	fares, err := h.service.GenerateTripFares(ctx, estimatedFares, rq.UserID)
+	fares, err := h.service.GenerateTripFares(ctx, estimatedFares, rq.UserID, route)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get route: %v", err)
 	}
 
 	return &pb.PreviewTripResponse{
-		Route:     r.ToProto(),
+		Route:     route.ToProto(),
 		RideFares: domain.ToRideFaresProto(fares),
 	}, nil
 }
