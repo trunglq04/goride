@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: trip-service
-          image: goride/trip-service
+          image: ${{ACR_NAME}}/goride/trip-service
           ports:
             - containerPort: 9093
           resources:
@@ -24,16 +24,17 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "200m"
+
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: trip-service
 spec:
-  type: ClusterIP
   selector:
     app: trip-service
   ports:
     - port: 9093
-      name: http
+      name: grpc
       targetPort: 9093
+  type: ClusterIP

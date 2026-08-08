@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api-gateway
-          image: europe-west1-docker.pkg.dev/{{PROJECT_ID}}/goride/api-gateway
+          image: ${{ACR_NAME}}/goride/api-gateway
           ports:
             - containerPort: 8081
           env:

@@ -14,8 +14,7 @@ spec:
     spec:
       containers:
         - name: trip-service
-          image: europe-west1-docker.pkg.dev/{{PROJECT_ID}}/github.com/trunglq04/goride
-/trip-service
+          image: europe-west1-docker.pkg.dev/{{PROJECT_ID}}/goride/trip-service
           ports:
             - containerPort: 9093
           resources:

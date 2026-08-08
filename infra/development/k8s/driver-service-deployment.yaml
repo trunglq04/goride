@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: driver-service
-          image: github.com/trunglq04/goride/driver-service
+          image: goride/driver-service
           ports:
             - containerPort: 9092
           resources:
