@@ -13,21 +13,21 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type gRPCHanler struct {
+type gRPCHandler struct {
 	pb.UnimplementedTripServiceServer
+
 	service domain.TripService
 }
 
-func NewGRPCHandler(server *grpc.Server, service domain.TripService) *gRPCHanler {
-	handler := &gRPCHanler{
+func NewGRPCHandler(server *grpc.Server, service domain.TripService) {
+	handler := &gRPCHandler{
 		service: service,
 	}
 
 	pb.RegisterTripServiceServer(server, handler)
-	return handler
 }
 
-func (h *gRPCHanler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest) (*pb.CreateTripResponse, error) {
+func (h *gRPCHandler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest) (*pb.CreateTripResponse, error) {
 	// 1. Fetch and validate the fare.
 	fareID := req.GetRideFareID()
 	userID := req.GetUserID()
@@ -50,7 +50,7 @@ func (h *gRPCHanler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest) 
 	}, nil
 }
 
-func (h *gRPCHanler) PreviewTrip(ctx context.Context, rq *pb.PreviewTripRequest) (*pb.PreviewTripResponse, error) {
+func (h *gRPCHandler) PreviewTrip(ctx context.Context, rq *pb.PreviewTripRequest) (*pb.PreviewTripResponse, error) {
 	pbPickup := rq.GetStartLocation()
 	pbDestination := rq.GetEndLocation()
 

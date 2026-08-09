@@ -22,12 +22,12 @@ func main() {
 	log.Println("Starting API Gateway")
 
 	// gin.SetMode(gin.ReleaseMode)
+	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
-	router.Use(enableCORS())
 
 	trip := router.Group("/trip")
-	trip.POST("/preview", handleTripPreview)
-	trip.POST("/start", handleTripStart)
+	trip.POST("/preview", enableCORSHandler(handleTripPreview))
+	trip.POST("/start", enableCORSHandler(handleTripStart))
 
 	ws := router.Group("/ws")
 	ws.GET("/drivers", handleDriversWebSocket)

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: trip-service
-          image: ${{ACR_NAME}}/goride/trip-service
+          image: goridecr.azurecr.io/goride/trip-service
           ports:
             - containerPort: 9093
           resources:
