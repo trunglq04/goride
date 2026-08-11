@@ -49,4 +49,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
 )
 
-require go.mongodb.org/mongo-driver v1.17.9
+require (
+	github.com/mmcloughlin/geohash v0.10.0
+	go.mongodb.org/mongo-driver v1.17.9
+)

@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: rabbitmq
-          image: rabbitmq:3-management
+          image: rabbitmq:4-management
           ports:
             - containerPort: 5672 # AMQP port
             - containerPort: 15672 # Management UI port
@@ -39,17 +39,17 @@ spec:
                   key: RABBITMQ_PASSWORD
             - name: RABBITMQ_MNESIA_BASE
               value: /var/lib/rabbitmq/mnesia
-          volumeMounts: 
+          volumeMounts:
             - name: rabbitmq-data
               mountPath: /var/lib/rabbitmq
   volumeClaimTemplates:
-  - metadata:
-      name: rabbitmq-data
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      resources:
-        requests:
-          storage: 1Gi
+    - metadata:
+        name: rabbitmq-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
 ---
 apiVersion: v1
 kind: Service

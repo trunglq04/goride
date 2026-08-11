@@ -3,7 +3,10 @@ package main
 import (
 	"log"
 	"net/http"
+
+	"github.com/trunglq04/goride/services/api-gateway/grpc_clients"
 	"github.com/trunglq04/goride/shared/contracts"
+	"github.com/trunglq04/goride/shared/proto/driver"
 	"github.com/trunglq04/goride/shared/util"
 
 	"github.com/gin-gonic/gin"
@@ -61,6 +64,31 @@ func handleDriversWebSocket(c *gin.Context) {
 		return
 	}
 
+	driverService, err := grpc_clients.NewDriverServiceClient()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer func() {
+		driverService.Client.UnregisterDriver(c, &driver.RegisterDriverRequest{
+			DriverID:    userID,
+			PackageSlug: packageSlug,
+		})
+
+		driverService.Close()
+
+		log.Println("Driver unregistered: ", userID)
+	}()
+
+	driverData, err := driverService.Client.RegisterDriver(c, &driver.RegisterDriverRequest{
+		DriverID:    userID,
+		PackageSlug: packageSlug,
+	})
+	if err != nil {
+		log.Printf("Error registering driver: %v", err)
+		return
+	}
+
 	type Driver struct {
 		Id             string `json:"id"`
 		Name           string `json:"name"`
@@ -73,9 +101,9 @@ func handleDriversWebSocket(c *gin.Context) {
 		Type: "driver.cmd.register",
 		Data: Driver{
 			Id:             userID,
-			Name:           "Louis",
+			Name:           driverData.Driver.Name,
 			ProfilePicture: util.GetRandomAvatar(1),
-			CarPlate:       "ABC123",
+			CarPlate:       driverData.Driver.CarPlate,
 			PackageSlug:    packageSlug,
 		},
 	}

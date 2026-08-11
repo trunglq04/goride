@@ -8,17 +8,18 @@ import (
 	"os/signal"
 	"syscall"
 
-	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/trunglq04/goride/shared/env"
+	"github.com/trunglq04/goride/shared/messaging"
 	grpcserver "google.golang.org/grpc"
 )
 
 var GrpcAddr = ":9092"
 
 func main() {
-	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)
@@ -32,18 +33,27 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	// RabbitMQ connection
-	conn, err := amqp.Dial(rabbitMqURI)
-	if err != nil {
-		log.Fatal("failed to connect to rabbitmq")
-	}
-	defer conn.Close()
-
 	service := NewService()
+
+	// RabbitMQ connection
+	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rabbitmq.Close()
+
+	log.Println("Starting RabbitMQ connection")
 
 	// Starting the gRPC server
 	grpcServer := grpcserver.NewServer()
 	NewGrpcHandler(grpcServer, service)
+
+	consumer := NewTripConsumer(rabbitmq, service)
+	go func() {
+		if err := consumer.Listen(); err != nil {
+			log.Fatalf("Failed to listen to the message: %v", err)
+		}
+	}()
 
 	log.Printf("Starting gRPC server Driver service on port %s", lis.Addr().String())
 

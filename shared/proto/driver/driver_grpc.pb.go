@@ -28,7 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DriverServiceClient interface {
 	RegisterDriver(ctx context.Context, in *RegisterDriverRequest, opts ...grpc.CallOption) (*RegisterDriverResponse, error)
-	UnregisterDriver(ctx context.Context, in *UnregisterDriverRequest, opts ...grpc.CallOption) (*UnregisterDriverResponse, error)
+	UnregisterDriver(ctx context.Context, in *RegisterDriverRequest, opts ...grpc.CallOption) (*RegisterDriverResponse, error)
 }
 
 type driverServiceClient struct {
@@ -49,9 +49,9 @@ func (c *driverServiceClient) RegisterDriver(ctx context.Context, in *RegisterDr
 	return out, nil
 }
 
-func (c *driverServiceClient) UnregisterDriver(ctx context.Context, in *UnregisterDriverRequest, opts ...grpc.CallOption) (*UnregisterDriverResponse, error) {
+func (c *driverServiceClient) UnregisterDriver(ctx context.Context, in *RegisterDriverRequest, opts ...grpc.CallOption) (*RegisterDriverResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UnregisterDriverResponse)
+	out := new(RegisterDriverResponse)
 	err := c.cc.Invoke(ctx, DriverService_UnregisterDriver_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (c *driverServiceClient) UnregisterDriver(ctx context.Context, in *Unregist
 // for forward compatibility.
 type DriverServiceServer interface {
 	RegisterDriver(context.Context, *RegisterDriverRequest) (*RegisterDriverResponse, error)
-	UnregisterDriver(context.Context, *UnregisterDriverRequest) (*UnregisterDriverResponse, error)
+	UnregisterDriver(context.Context, *RegisterDriverRequest) (*RegisterDriverResponse, error)
 	mustEmbedUnimplementedDriverServiceServer()
 }
 
@@ -78,7 +78,7 @@ type UnimplementedDriverServiceServer struct{}
 func (UnimplementedDriverServiceServer) RegisterDriver(context.Context, *RegisterDriverRequest) (*RegisterDriverResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterDriver not implemented")
 }
-func (UnimplementedDriverServiceServer) UnregisterDriver(context.Context, *UnregisterDriverRequest) (*UnregisterDriverResponse, error) {
+func (UnimplementedDriverServiceServer) UnregisterDriver(context.Context, *RegisterDriverRequest) (*RegisterDriverResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UnregisterDriver not implemented")
 }
 func (UnimplementedDriverServiceServer) mustEmbedUnimplementedDriverServiceServer() {}
@@ -121,7 +121,7 @@ func _DriverService_RegisterDriver_Handler(srv interface{}, ctx context.Context,
 }
 
 func _DriverService_UnregisterDriver_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UnregisterDriverRequest)
+	in := new(RegisterDriverRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func _DriverService_UnregisterDriver_Handler(srv interface{}, ctx context.Contex
 		FullMethod: DriverService_UnregisterDriver_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DriverServiceServer).UnregisterDriver(ctx, req.(*UnregisterDriverRequest))
+		return srv.(DriverServiceServer).UnregisterDriver(ctx, req.(*RegisterDriverRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
