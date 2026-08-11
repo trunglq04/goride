@@ -37,6 +37,7 @@ require (
 
 require (
 	github.com/go-logr/logr v1.4.4 // indirect
+	github.com/rabbitmq/amqp091-go v1.13.0 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.8.0 // indirect
 )
 

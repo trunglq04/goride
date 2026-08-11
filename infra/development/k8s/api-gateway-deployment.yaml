@@ -29,8 +29,8 @@ spec:
             - name: GATEWAY_HTTP_ADDR
               valueFrom:
                 configMapKeyRef:
-                  key: GATEWAY_HTTP_ADDR
                   name: app-config
+                  key: GATEWAY_HTTP_ADDR
 ---
 apiVersion: v1
 kind: Service

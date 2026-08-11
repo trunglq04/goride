@@ -3,8 +3,10 @@ package grpc
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/trunglq04/goride/services/trip-service/internal/domain"
+	"github.com/trunglq04/goride/services/trip-service/internal/infrastructure/events"
 	pb "github.com/trunglq04/goride/shared/proto/trip"
 	types "github.com/trunglq04/goride/shared/types"
 
@@ -16,12 +18,14 @@ import (
 type gRPCHandler struct {
 	pb.UnimplementedTripServiceServer
 
-	service domain.TripService
+	service   domain.TripService
+	publisher *events.TripEventPublisher
 }
 
-func NewGRPCHandler(server *grpc.Server, service domain.TripService) {
+func NewGRPCHandler(server *grpc.Server, service domain.TripService, publisher *events.TripEventPublisher) {
 	handler := &gRPCHandler{
-		service: service,
+		service:   service,
+		publisher: publisher,
 	}
 
 	pb.RegisterTripServiceServer(server, handler)
@@ -43,7 +47,12 @@ func (h *gRPCHandler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest)
 		return nil, status.Errorf(codes.Internal, "failed to create trip: %v", err)
 	}
 	// 3. Initialize an empty driver to the trip.
-	// 4. Add comment at the end of the func to publish an event on the Async Comms module
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err = h.publisher.PublishTripCreated(ctx); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to publish the trip created event: %v", err)
+	}
 
 	return &pb.CreateTripResponse{
 		TripID: trip.ID.Hex(),

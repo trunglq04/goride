@@ -46,7 +46,7 @@ spec:
   - metadata:
       name: rabbitmq-data
     spec:
-      accessModes: ["ReadWriteOnce"]
+      accessMode: [ "ReadWriteOnce" ]
       resources:
         requests:
           storage: 1Gi
