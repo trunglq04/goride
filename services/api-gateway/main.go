@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/trunglq04/goride/shared/env"
+	"github.com/trunglq04/goride/shared/messaging"
 
 	"github.com/gin-gonic/gin"
 )
 
 var (
-	httpAddr = env.GetString("HTTP_ADDR", ":8081")
+	httpAddr    = env.GetString("HTTP_ADDR", ":8081")
+	rabbitMqURI = env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
 )
 
 func main() {
@@ -25,13 +27,20 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
+	// RabbitMQ connection
+	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rabbitmq.Close()
+
 	trip := router.Group("/trip")
 	trip.POST("/preview", enableCORSHandler(handleTripPreview))
 	trip.POST("/start", enableCORSHandler(handleTripStart))
 
 	ws := router.Group("/ws")
-	ws.GET("/drivers", handleDriversWebSocket)
-	ws.GET("/riders", handleRidersWebSocket)
+	ws.GET("/drivers", func(c *gin.Context) { handleDriversWebSocket(c, rabbitmq) })
+	ws.GET("/riders", func(c *gin.Context) { handleRidersWebSocket(c, rabbitmq) })
 
 	server := &http.Server{
 		Addr:    httpAddr,
