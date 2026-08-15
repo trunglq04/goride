@@ -26,7 +26,7 @@ func NewGrpcHandler(s *grpc.Server, service *Service) {
 func (h *driverGrpcHandler) RegisterDriver(ctx context.Context, req *pb.RegisterDriverRequest) (*pb.RegisterDriverResponse, error) {
 	driver, err := h.service.RegisterDriver(req.GetDriverID(), req.GetPackageSlug())
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to register driver")
+		return nil, status.Errorf(codes.Internal, "Failed to register driver")
 	}
 
 	return &pb.RegisterDriverResponse{

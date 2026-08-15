@@ -38,20 +38,20 @@ func (h *gRPCHandler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest)
 
 	rideFare, err := h.service.GetAndValidateFare(ctx, fareID, userID)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to validate fare: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to validate fare: %v", err)
 	}
 
 	// 2. Call create trip.
 	trip, err := h.service.CreateTrip(ctx, rideFare)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to create trip: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to create trip: %v", err)
 	}
 	// 3. Initialize an empty driver to the trip.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err = h.publisher.PublishTripCreated(ctx, trip); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to publish the trip created event: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to publish the trip created event: %v", err)
 	}
 
 	return &pb.CreateTripResponse{
@@ -75,7 +75,7 @@ func (h *gRPCHandler) PreviewTrip(ctx context.Context, rq *pb.PreviewTripRequest
 	route, err := h.service.GetRoute(ctx, pickup, destination, true)
 	if err != nil {
 		log.Println(err)
-		return nil, status.Errorf(codes.Internal, "failed to get route: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to get route: %v", err)
 	}
 
 	// 1. Estimate the ride fares prices based on the route (ex: distance)
@@ -83,7 +83,7 @@ func (h *gRPCHandler) PreviewTrip(ctx context.Context, rq *pb.PreviewTripRequest
 	// 2. Store the ride fares for the create trip to fetch and validate
 	fares, err := h.service.GenerateTripFares(ctx, estimatedFares, rq.UserID, route)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get route: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to get route: %v", err)
 	}
 
 	return &pb.PreviewTripResponse{

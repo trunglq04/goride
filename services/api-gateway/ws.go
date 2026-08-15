@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 
+	"github.com/gorilla/websocket"
 	"github.com/trunglq04/goride/services/api-gateway/grpc_clients"
 	"github.com/trunglq04/goride/shared/contracts"
 	"github.com/trunglq04/goride/shared/messaging"
@@ -17,11 +18,16 @@ var connManager = messaging.NewConnectionManager()
 func handleRidersWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 	wsConn, err := connManager.Upgrade(c)
 	if err != nil {
-		log.Printf("WebSocket upgrade failed: %v", err)
+		log.Printf("WebSocket upgrade Failed: %v", err)
 		return
 	}
 
-	defer wsConn.Close()
+	defer func(wsConn *websocket.Conn) {
+		err := wsConn.Close()
+		if err != nil {
+			log.Printf("WebSocket close Failed: %v", err)
+		}
+	}(wsConn)
 
 	userID := c.Query("userID")
 	if userID == "" {
@@ -34,18 +40,18 @@ func handleRidersWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 
 	// Initialize queue consumers
 	queues := []string{
-		messaging.NotifyDriverNoDriversFoundQueue,
-		messaging.NotifyDriverAssignQueue,
-		messaging.NotifyPaymentSessionCreatedQueue,
+		messaging.NotifyDriverNoDriversFoundQueue, // When no drivers found
+		messaging.NotifyDriverAssignQueue,         // When a driver is assigned to the trip
+		// messaging.NotifyPaymentSessionCreatedQueue, // When a payment session is created
 	}
 
 	for _, q := range queues {
 		consumer := messaging.NewQueueConsumer(rb, connManager, q)
 
 		if err := consumer.Start(); err != nil {
-			log.Printf("Failed to start consumer for queue: %s: err: %v", q, err)
+			log.Printf("Failed to start rider consumer for queue: %s: err: %v", q, err)
 		}
-	}
+	} 
 
 	for {
 		_, message, err := wsConn.ReadMessage()
@@ -61,11 +67,16 @@ func handleRidersWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 	wsConn, err := connManager.Upgrade(c)
 	if err != nil {
-		log.Printf("WebSocket upgrade failed: %v", err)
+		log.Printf("WebSocket upgrade Failed: %v", err)
 		return
 	}
 
-	defer wsConn.Close()
+	defer func(wsConn *websocket.Conn) {
+		err := wsConn.Close()
+		if err != nil {
+			log.Printf("WebSocket close Failed: %v", err)
+		}
+	}(wsConn)
 
 	userID := c.Query("userID")
 	if userID == "" {
@@ -90,14 +101,17 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 	defer func() {
 		connManager.Remove(userID)
 
-		driverService.Client.UnregisterDriver(c, &driver.RegisterDriverRequest{
+		res, err := driverService.Client.UnregisterDriver(c, &driver.RegisterDriverRequest{
 			DriverID:    userID,
 			PackageSlug: packageSlug,
 		})
+		if err != nil {
+			log.Printf("Error unregistering driver: %v", err)
+		}
 
 		driverService.Close()
 
-		log.Println("Driver unregistered: ", userID)
+		log.Println("Driver unregistered: ", res.Driver.Id)
 	}()
 
 	driverData, err := driverService.Client.RegisterDriver(c, &driver.RegisterDriverRequest{
@@ -127,7 +141,7 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 		consumer := messaging.NewQueueConsumer(rb, connManager, q)
 
 		if err := consumer.Start(); err != nil {
-			log.Printf("Failed to start consumer for queue: %s: err: %v", q, err)
+			log.Printf("Failed to start driver consumer for queue: %s: err: %v", q, err)
 		}
 	}
 
@@ -145,21 +159,22 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 
 		var driverMsg driverMessage
 		if err := json.Unmarshal(message, &driverMsg); err != nil {
-			log.Printf("Error unmarshaling driver message: %v", err)
+			log.Printf("Error unmarshalling driver message: %v", err)
 			continue
 		}
 
-		// Handle the different message type
+		// Handle the different message types
 		switch driverMsg.Type {
 		case contracts.DriverCmdLocation:
-			// Handle driver location update in the future
+			// TODO: Handle driver's location update in the future
 			continue
 		case contracts.DriverCmdTripAccept, contracts.DriverCmdTripDecline:
-			// Forward the message to RabbitMQ
-			if err := rb.PublishMessage(c, driverMsg.Type, contracts.AmqpMessage{
-				OwnerID: userID,
-				Data:    driverMsg.Data,
-			}); err != nil {
+			if err := rb.PublishMessage(c,
+				driverMsg.Type,
+				contracts.AmqpMessage{
+					OwnerID: userID,
+					Data:    driverMsg.Data,
+				}); err != nil {
 				log.Printf("Error publishing message to RabbitMQ: %v", err)
 			}
 		default:

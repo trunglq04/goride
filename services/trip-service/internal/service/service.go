@@ -9,6 +9,7 @@ import (
 
 	"github.com/trunglq04/goride/services/trip-service/internal/domain"
 	tripTypes "github.com/trunglq04/goride/services/trip-service/pkg/types"
+	pbd "github.com/trunglq04/goride/shared/proto/driver"
 	"github.com/trunglq04/goride/shared/proto/trip"
 	types "github.com/trunglq04/goride/shared/types"
 
@@ -75,18 +76,18 @@ func (s *service) GetRoute(ctx context.Context, pickup, destination *types.Coord
 
 	resp, err := http.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch route from OSRM API: %v", err)
+		return nil, fmt.Errorf("Failed to fetch route from OSRM API: %v", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read the response: %v", err)
+		return nil, fmt.Errorf("Failed to read the response: %v", err)
 	}
 
 	var routeResp tripTypes.OsrmApiResponse
 	if err := json.Unmarshal(body, &routeResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %v", err)
+		return nil, fmt.Errorf("Failed to parse response: %v", err)
 	}
 
 	return &routeResp, nil
@@ -117,7 +118,7 @@ func (s *service) GenerateTripFares(ctx context.Context, rideFares []*domain.Rid
 		}
 
 		if err := s.repo.SaveRideFare(ctx, fare); err != nil {
-			return nil, fmt.Errorf("failed to save trip fare: %v", err)
+			return nil, fmt.Errorf("Failed to save trip fare: %v", err)
 		}
 
 		fares[i] = fare
@@ -129,7 +130,7 @@ func (s *service) GenerateTripFares(ctx context.Context, rideFares []*domain.Rid
 func (s *service) GetAndValidateFare(ctx context.Context, fareID, userID string) (*domain.RideFareModel, error) {
 	fare, err := s.repo.GetRideFareByID(ctx, fareID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get trip fare: %v", err)
+		return nil, fmt.Errorf("Failed to get trip fare: %v", err)
 	}
 
 	if fare == nil {
@@ -179,4 +180,12 @@ func getBaseFares() []*domain.RideFareModel {
 			TotalPriceInCents: 1000,
 		},
 	}
+}
+
+func (s *service) GetTripByID(ctx context.Context, id string) (*domain.TripModel, error) {
+	return s.repo.GetTripByID(ctx, id)
+}
+
+func (s *service) UpdateTrip(ctx context.Context, tripID string, status string, driver *pbd.Driver) error {
+	return s.repo.UpdateTrip(ctx, tripID, status, driver)
 }

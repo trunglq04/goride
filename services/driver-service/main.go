@@ -30,7 +30,7 @@ func main() {
 
 	lis, err := net.Listen("tcp", GrpcAddr)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatalf("Failed to listen: %v", err)
 	}
 
 	service := NewService()
@@ -59,7 +59,7 @@ func main() {
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
-			log.Printf("failed to serve: %v", err)
+			log.Printf("Failed to serve: %v", err)
 			cancel()
 		}
 	}()
@@ -68,5 +68,4 @@ func main() {
 	<-ctx.Done()
 	log.Printf("Shutting down the server...")
 	grpcServer.GracefulStop()
-
 }

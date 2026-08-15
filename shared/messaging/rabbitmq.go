@@ -24,14 +24,13 @@ type RabbitMQ struct {
 func NewRabbitMQ(uri string) (*RabbitMQ, error) {
 	conn, err := amqp.Dial(uri)
 	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to connect to RabbitMQ: %v", err)
+		return nil, fmt.Errorf("Failed to connect to RabbitMQ: %v", err)
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to create  RabbitMQ channel : %v", err)
+		err := conn.Close()
+		return nil, fmt.Errorf("Failed to create  RabbitMQ channel : %v", err)
 	}
 
 	rmq := &RabbitMQ{
@@ -39,78 +38,13 @@ func NewRabbitMQ(uri string) (*RabbitMQ, error) {
 		Channel: ch,
 	}
 
+	// Setup the exchange and queues
 	if err := rmq.setupExchangesAndQueues(); err != nil {
 		rmq.Close()
-		return nil, fmt.Errorf("failed to setup exchanges and queues: %v", err)
+		return nil, fmt.Errorf("Failed to setup exchanges and queues: %v", err)
 	}
 
 	return rmq, nil
-}
-
-func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, message contracts.AmqpMessage) error {
-	log.Printf("Publishing message with routing key: %s", routingKey)
-
-	jsonMsg, err := json.Marshal(message)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %v", err)
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	return r.Channel.PublishWithContext(ctx,
-		TripExchange, // exchange
-		routingKey,   // routing key
-		false,        // mandatory
-		false,        // immediate
-		amqp.Publishing{
-			ContentType:  "application/json",
-			Body:         jsonMsg,
-			DeliveryMode: amqp.Persistent,
-		})
-}
-
-type MessageHandler func(context.Context, amqp.Delivery) error
-
-func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) error {
-	// QoS (Quanlity of Service): Set prefetch count to 1 for fair dispatch
-	// This tells Rabbitmq not to give more than one msg to a service at a time
-	// The worker will only get the next message after it has acknowledged the previous one.
-	err := r.Channel.Qos(
-		1,     // prefetchCount: Limit to 1 unacknowledged msg per consumer
-		0,     // prefetchSize: No specific liimit on msg size
-		false, // global: Apply prefetchCount to each consumer individually
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set QoS: %v", err)
-	}
-
-	msgs, err := r.Channel.Consume(
-		queueName, // queue
-		"",        // consumer
-		false,     // auto-ack
-		false,     // exclusive
-		false,     // no-local
-		false,     // no-wait
-		nil,       // args
-	)
-	if err != nil {
-		return fmt.Errorf("failed to consume a message: %v", err)
-	}
-
-	ctx := context.Background()
-
-	go func() {
-		for msg := range msgs {
-			log.Printf("Received a message: %s", msg.Body)
-
-			if err := handler(ctx, msg); err != nil {
-				log.Fatalf("failed to handle the message: %v", err)
-			}
-		}
-	}()
-
-	return nil
 }
 
 func (r *RabbitMQ) setupExchangesAndQueues() error {
@@ -124,16 +58,51 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		nil,          // arguments
 	)
 	if err != nil {
-		return fmt.Errorf("failed to declare exchange %s: %v", TripExchange, err)
+		return fmt.Errorf("Failed to declare exchange %s: %v", TripExchange, err)
 	}
 
 	if err := r.declareAndBindQueue(
 		FindAvailableDriversQueue, // queue name
-		[]string{
+		[]string{ // routing keys
 			contracts.TripEventCreated,
 			contracts.TripEventDriverNotInterested,
 		}, // message types
 		TripExchange, // exchange
+	); err != nil {
+		return err
+	}
+
+	if err := r.declareAndBindQueue(
+		DriverCmdTripRequestQueue,
+		[]string{contracts.DriverCmdTripRequest},
+		TripExchange,
+	); err != nil {
+		return err
+	}
+
+	if err := r.declareAndBindQueue(
+		DriverTripResponseQueue,
+		[]string{
+			contracts.DriverCmdTripAccept,
+			contracts.DriverCmdTripDecline,
+		},
+		TripExchange,
+	); err != nil {
+		return err
+	}
+
+	if err := r.declareAndBindQueue(
+		NotifyDriverNoDriversFoundQueue,
+		[]string{contracts.TripEventNoDriversFound},
+		TripExchange,
+	); err != nil {
+		return err
+	}
+
+	if err := r.declareAndBindQueue(
+		NotifyDriverAssignQueue,
+		[]string{contracts.TripEventDriverAssigned},
+		TripExchange,
 	); err != nil {
 		return err
 	}
@@ -164,7 +133,7 @@ func (r *RabbitMQ) declareAndBindQueue(queueName string, messageTypes []string, 
 			false,
 			nil,
 		); err != nil {
-			return fmt.Errorf("failed to bind queue to %s: %v", queueName, err)
+			return fmt.Errorf("Failed to bind queue to %s: %v", queueName, err)
 		}
 	}
 
@@ -175,7 +144,74 @@ func (r *RabbitMQ) Close() {
 	if r.conn != nil {
 		r.conn.Close()
 	}
+
 	if r.Channel != nil {
 		r.Channel.Close()
 	}
+}
+
+func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, message contracts.AmqpMessage) error {
+	log.Printf("Publishing message with routing key: %s", routingKey)
+
+	jsonMsg, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("Failed to marshal message: %v", err)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.Channel.PublishWithContext(ctx,
+		TripExchange, // exchange
+		routingKey,   // routing key
+		false,        // mandatory
+		false,        // immediate
+		amqp.Publishing{
+			ContentType:  "application/json",
+			Body:         jsonMsg,
+			DeliveryMode: amqp.Persistent,
+		})
+}
+
+type MessageHandler func(context.Context, amqp.Delivery) error
+
+func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) error {
+	// QoS (Quality of Service): Set prefetch count to 1 for fair dispatch
+	// This tells RabbitMQ not to give more than one msg to a service at a time
+	// The worker will only get the next message after it has acknowledged the previous one.
+	err := r.Channel.Qos(
+		1,     // prefetchCount: Limit to 1 unacknowledged msg per consumer
+		0,     // prefetchSize: No specific limit on msg size
+		false, // global: Apply prefetchCount to each consumer individually
+	)
+	if err != nil {
+		return fmt.Errorf("Failed to set QoS: %v", err)
+	}
+
+	msgs, err := r.Channel.Consume(
+		queueName, // queue
+		"",        // consumer
+		false,     // auto-ack
+		false,     // exclusive
+		false,     // no-local
+		false,     // no-wait
+		nil,       // args
+	)
+	if err != nil {
+		return fmt.Errorf("Failed to consume a message: %v", err)
+	}
+
+	ctx := context.Background()
+
+	go func() {
+		for msg := range msgs {
+			log.Printf("Received a message: %s", msg.Body)
+
+			if err := handler(ctx, msg); err != nil {
+				log.Fatalf("Failed to handle the message: %v", err)
+			}
+		}
+	}()
+
+	return nil
 }

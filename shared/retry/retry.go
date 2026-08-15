@@ -51,7 +51,7 @@ func WithBackoff(ctx context.Context, cfg Config, operation func() error) error 
 			return nil
 		}
 
-		log.Printf("Operation failed (attempt %d/%d): %v", attempt+1, cfg.MaxRetries, err)
+		log.Printf("Operation Failed (attempt %d/%d): %v", attempt+1, cfg.MaxRetries, err)
 	}
 
 	return err

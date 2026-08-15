@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -23,7 +24,6 @@ var (
 func main() {
 	log.Println("Starting API Gateway")
 
-	// gin.SetMode(gin.ReleaseMode)
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
@@ -35,8 +35,8 @@ func main() {
 	defer rabbitmq.Close()
 
 	trip := router.Group("/trip")
-	trip.POST("/preview", enableCORSHandler(handleTripPreview))
-	trip.POST("/start", enableCORSHandler(handleTripStart))
+	trip.POST("/preview", enableCORS(handleTripPreview))
+	trip.POST("/start", enableCORS(handleTripStart))
 
 	ws := router.Group("/ws")
 	ws.GET("/drivers", func(c *gin.Context) { handleDriversWebSocket(c, rabbitmq) })
@@ -59,21 +59,21 @@ func main() {
 
 	select {
 	case err := <-serverErrors:
-		if err != nil && err != http.ErrServerClosed {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Server error: %v", err)
 		}
 		log.Printf("Server stopped: %v", err)
 
 	case sig := <-shutdown:
-		log.Printf("Server is shuting down due to %v signal", sig)
+		log.Printf("Server is shutting down due to %v signal", sig)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		if err := server.Shutdown(ctx); err != nil {
-			log.Printf("Graceful shutdown failed: %v", err)
+			log.Printf("Graceful shutdown Failed: %v", err)
 			if cerr := server.Close(); cerr != nil {
-				log.Printf("Forced server close failed: %v", cerr)
+				log.Printf("Forced server close Failed: %v", cerr)
 			}
 		} else {
 			log.Printf("Server shut down gracefully")

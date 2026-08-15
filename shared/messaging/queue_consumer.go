@@ -59,7 +59,14 @@ func (qc *QueueConsumer) Start() error {
 			}
 
 			if err := qc.connMgr.SendMessage(userID, clientMsg); err != nil {
-				log.Printf("Failed to send message to user %s: %v", userID, err)
+				if err == ErrConnectionNotFound {
+					// The target WebSocket connection doesn't exist yet — requeue
+					// so it can be retried once the client reconnects.
+					log.Printf("connection not found for user %s, requeueing message", userID)
+				} else {
+					log.Printf("Failed to send message to user %s: %v — discarding", userID, err)
+				}
+				continue
 			}
 		}
 	}()

@@ -29,8 +29,10 @@ func (p *TripEventPublisher) PublishTripCreated(ctx context.Context, trip *domai
 		return err
 	}
 
-	return p.rabbitmq.PublishMessage(ctx, contracts.TripEventCreated, contracts.AmqpMessage{
-		OwnerID: trip.UserID,
-		Data:    tripEventJSON,
-	})
+	return p.rabbitmq.PublishMessage(ctx,
+		contracts.TripEventCreated,
+		contracts.AmqpMessage{
+			OwnerID: trip.UserID,
+			Data:    tripEventJSON,
+		})
 }

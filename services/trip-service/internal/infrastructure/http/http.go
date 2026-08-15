@@ -22,7 +22,7 @@ type previewTripRequest struct {
 func (h *HttpHandler) HandleTripPreview(c *gin.Context) {
 	var reqBody previewTripRequest
 	if err := c.ShouldBindBodyWithJSON(&reqBody); err != nil {
-		c.JSON(http.StatusInternalServerError, "failed to parse JSON data")
+		c.JSON(http.StatusInternalServerError, "Failed to parse JSON data")
 		return
 	}
 

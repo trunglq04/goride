@@ -10,8 +10,8 @@ type AmqpMessage struct {
 const (
 	// Trip events (trip.event.*)
 	TripEventCreated             = "trip.event.created"
-	TripEventDriverAssigned      = "trip.event.driver_assigned"
 	TripEventNoDriversFound      = "trip.event.no_drivers_found"
+	TripEventDriverAssigned      = "trip.event.driver_assigned"
 	TripEventDriverNotInterested = "trip.event.driver_not_interested"
 
 	// Driver commands (driver.cmd.*)
@@ -24,7 +24,7 @@ const (
 	// Payment events (payment.event.*)
 	PaymentEventSessionCreated = "payment.event.session_created"
 	PaymentEventSuccess        = "payment.event.success"
-	PaymentEventFailed         = "payment.event.failed"
+	PaymentEventFailed         = "payment.event.Failed"
 	PaymentEventCancelled      = "payment.event.cancelled"
 
 	// Payment commands (payment.cmd.*)

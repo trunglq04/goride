@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	math "math/rand/v2"
 
 	"github.com/mmcloughlin/geohash"
@@ -13,7 +14,7 @@ import (
 
 type Service struct {
 	drivers []*driverInMap
-	mu      sync.Mutex
+	mu      sync.RWMutex
 }
 
 type driverInMap struct {
@@ -29,8 +30,10 @@ func NewService() *Service {
 }
 
 func (s *Service) FindAvailableDrivers(packageType string) []string {
-	var matchingDrivers []string
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
+	var matchingDrivers []string
 	for _, driver := range s.drivers {
 		if driver.Driver.PackageSlug == packageType {
 			matchingDrivers = append(matchingDrivers, driver.Driver.Id)
@@ -45,9 +48,6 @@ func (s *Service) FindAvailableDrivers(packageType string) []string {
 }
 
 func (s *Service) RegisterDriver(driverId string, packageSlug string) (*pb.Driver, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	randomIndex := math.IntN(len(PredefinedRoutes))
 	randomRoute := PredefinedRoutes[randomIndex]
 
@@ -55,21 +55,25 @@ func (s *Service) RegisterDriver(driverId string, packageSlug string) (*pb.Drive
 	randomAvatar := util.GetRandomAvatar(randomIndex)
 
 	// we can ignore this property for now, but it must be sent to the frontend.
-	geohash := geohash.Encode(randomRoute[0][0], randomRoute[0][1])
+	geohashStr := geohash.Encode(randomRoute[0][0], randomRoute[0][1])
 
 	driver := &pb.Driver{
 		Id:             driverId,
-		Geohash:        geohash,
+		Geohash:        geohashStr,
 		Location:       &pb.Location{Latitude: randomRoute[0][0], Longitude: randomRoute[0][1]},
-		Name:           "Lando Norris",
+		Name:           "Happy Driver",
 		PackageSlug:    packageSlug,
 		ProfilePicture: randomAvatar,
 		CarPlate:       randomPlate,
 	}
 
+	s.mu.Lock()
 	s.drivers = append(s.drivers, &driverInMap{
 		Driver: driver,
 	})
+	s.mu.Unlock()
+
+	log.Printf("Succesfully REGISTER a DRIVER: %v, packageSlug: %v\n", driver.Id, driver.PackageSlug)
 
 	return driver, nil
 }
@@ -81,6 +85,8 @@ func (s *Service) UnregisterDriver(driverId string) {
 	for i, driver := range s.drivers {
 		if driver.Driver.Id == driverId {
 			s.drivers = append(s.drivers[:i], s.drivers[i+1:]...)
+			log.Println("Succesfully UNREGISTER a DRIVER:", driverId)
 		}
 	}
+
 }
