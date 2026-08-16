@@ -9,7 +9,7 @@ import (
 type RideFareModel struct {
 	ID                primitive.ObjectID
 	UserID            string
-	PackageSlug       string // ex: van, luxury, sedan
+	PackageSlug       string // ex: sedan, suv, van, luxury
 	TotalPriceInCents float64
 	Route             *tripTypes.OsrmApiResponse
 }

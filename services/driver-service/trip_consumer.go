@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"math/rand"
 
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/trunglq04/goride/shared/contracts"
@@ -45,22 +46,24 @@ func (c *TripConsumer) Listen() error {
 				if err := c.handleFindAndNotifyDrivers(ctx, payload); err != nil {
 					return err
 				}
-
-				return msg.Ack(false)
+			default:
+				log.Printf("unknown trip event routing key: %s", msg.RoutingKey)
 			}
 
-			log.Printf("unknown trip event routing key: %s", msg.RoutingKey)
-
-			return msg.Ack(false)
+			return nil
 		})
 }
 
 func (c *TripConsumer) handleFindAndNotifyDrivers(ctx context.Context, payload messaging.TripEventData) error {
-	suitableIDs := c.service.FindAvailableDrivers(payload.Trip.GetSelectedFare().PackageSlug)
+	suitableIDs := c.service.FindAvailableDrivers(
+		payload.Trip.GetSelectedFare().PackageSlug,
+		payload.ExcludeDriverIDs,
+	)
 
 	log.Printf("Found suitable %v drivers", len(suitableIDs))
 
 	if len(suitableIDs) == 0 {
+		log.Printf("No suitable drivers found for packageSlug=%q, notifying rider", payload.Trip.GetSelectedFare().GetPackageSlug())
 		// Notify the rider that no drivers are available
 		if err := c.rabbitmq.PublishMessage(ctx,
 			contracts.TripEventNoDriversFound,
@@ -74,7 +77,8 @@ func (c *TripConsumer) handleFindAndNotifyDrivers(ctx context.Context, payload m
 		return nil
 	}
 
-	suitableDriverID := suitableIDs[0]
+	randIndex := rand.Intn(len(suitableIDs))
+	suitableDriverID := suitableIDs[randIndex]
 
 	marshalledEvent, err := json.Marshal(payload)
 	if err != nil {

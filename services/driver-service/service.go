@@ -29,13 +29,18 @@ func NewService() *Service {
 	}
 }
 
-func (s *Service) FindAvailableDrivers(packageType string) []string {
+func (s *Service) FindAvailableDrivers(packageType string, excludedDriverIDs []string) []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	excluded := make(map[string]bool, len(excludedDriverIDs))
+	for _, id := range excludedDriverIDs {
+		excluded[id] = true
+	}
+
 	var matchingDrivers []string
 	for _, driver := range s.drivers {
-		if driver.Driver.PackageSlug == packageType {
+		if driver.Driver.PackageSlug == packageType && !excluded[driver.Driver.Id] {
 			matchingDrivers = append(matchingDrivers, driver.Driver.Id)
 		}
 	}

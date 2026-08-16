@@ -51,7 +51,7 @@ func (r *inmemRepository) GetTripByID(ctx context.Context, id string) (*domain.T
 	return trip, nil
 }
 
-func (r *inmemRepository) UpdateTrip(ctx context.Context, tripID string, status string, driver *pbd.Driver) error {
+func (r *inmemRepository) UpdateTrip(ctx context.Context, tripID string, status string, driver *pbd.Driver, excludedDriverID *string) error {
 	trip, ok := r.trips[tripID]
 	if !ok {
 		return fmt.Errorf("trip not found with ID: %s", tripID)
@@ -66,6 +66,10 @@ func (r *inmemRepository) UpdateTrip(ctx context.Context, tripID string, status 
 			CarPlate:       driver.CarPlate,
 			ProfilePicture: driver.ProfilePicture,
 		}
+	}
+
+	if excludedDriverID != nil {
+		trip.ExcludedDriverIDs = append(trip.ExcludedDriverIDs, *excludedDriverID)
 	}
 	return nil
 }

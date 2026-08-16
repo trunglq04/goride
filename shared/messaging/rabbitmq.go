@@ -7,7 +7,7 @@ import (
 	"log"
 	"sync"
 
-	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/rabbitmq/amqp091-go"
 	"github.com/trunglq04/goride/shared/contracts"
 )
 
@@ -16,13 +16,13 @@ const (
 )
 
 type RabbitMQ struct {
-	conn    *amqp.Connection
-	Channel *amqp.Channel
+	conn    *amqp091.Connection
+	Channel *amqp091.Channel
 	mu      sync.Mutex
 }
 
 func NewRabbitMQ(uri string) (*RabbitMQ, error) {
-	conn, err := amqp.Dial(uri)
+	conn, err := amqp091.Dial(uri)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to connect to RabbitMQ: %v", err)
 	}
@@ -117,8 +117,8 @@ func (r *RabbitMQ) declareAndBindQueue(queueName string, messageTypes []string, 
 		false,     // delete when unused
 		false,     // exclusive
 		false,     // no-wait
-		amqp.Table{
-			amqp.QueueTypeArg: amqp.QueueTypeQuorum,
+		amqp091.Table{
+			amqp091.QueueTypeArg: amqp091.QueueTypeQuorum,
 		},
 	)
 	if err != nil {
@@ -166,14 +166,14 @@ func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, messag
 		routingKey,   // routing key
 		false,        // mandatory
 		false,        // immediate
-		amqp.Publishing{
+		amqp091.Publishing{
 			ContentType:  "application/json",
 			Body:         jsonMsg,
-			DeliveryMode: amqp.Persistent,
+			DeliveryMode: amqp091.Persistent,
 		})
 }
 
-type MessageHandler func(context.Context, amqp.Delivery) error
+type MessageHandler func(context.Context, amqp091.Delivery) error
 
 func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) error {
 	// QoS (Quality of Service): Set prefetch count to 1 for fair dispatch
@@ -208,8 +208,14 @@ func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) err
 			log.Printf("Received a message: %s", msg.Body)
 
 			if err := handler(ctx, msg); err != nil {
-				log.Fatalf("Failed to handle the message: %v", err)
+				log.Printf("Failed to handle the message: %v", err)
+				// Nack without requeue — discard poison message to avoid crash loop
+				msg.Nack(false, false)
+				continue
 			}
+
+			// Ack only on success
+			msg.Ack(false)
 		}
 	}()
 

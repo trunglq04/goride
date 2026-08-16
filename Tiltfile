@@ -41,7 +41,7 @@ docker_build_with_restart(
 
 k8s_yaml('./infra/development/k8s/api-gateway-deployment.yaml')
 k8s_resource('api-gateway', port_forwards=8081,
-             resource_deps=['api-gateway-compile'], labels="services")
+             resource_deps=['api-gateway-compile', 'trip-service', 'driver-service'], labels="services") # Add trip service and driver service to resource_deps to ensure them start before starting the API Gateway
 ### End of API Gateway ###
 ### Trip Service ###
 

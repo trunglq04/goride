@@ -43,7 +43,7 @@ func (c *driverConsumer) Listen() error {
 				return err
 			}
 
-			log.Printf("driver response received message: %+v", payload)
+			log.Printf("Driver response received message: %+v", payload)
 
 			switch msg.RoutingKey {
 			case contracts.DriverCmdTripAccept:
@@ -52,28 +52,33 @@ func (c *driverConsumer) Listen() error {
 					return err
 				}
 			case contracts.DriverCmdTripDecline:
-				if err := c.handleTripDeclined(ctx, payload.TripID, payload.RiderID); err != nil {
+				if err := c.handleTripDeclined(ctx, payload.TripID, payload.RiderID, payload.Driver.Id); err != nil {
 					log.Printf("Failed to handle the trip decline: %v", err)
 					return err
 				}
+			default:
+				// Unknown routing key — discard, do not requeue.
+				log.Printf("Unknown driver response routing key: %s", msg.RoutingKey)
 			}
-
-			// Unknown routing key — discard, do not requeue.
-			log.Printf("unknown driver response routing key: %s", msg.RoutingKey)
 			return nil
 		})
 }
 
-func (c *driverConsumer) handleTripDeclined(ctx context.Context, tripID, riderID string) error {
+func (c *driverConsumer) handleTripDeclined(ctx context.Context, tripID, riderID, driverID string) error {
 	// When a driver declines, we should try to find another driver
-
 	trip, err := c.service.GetTripByID(ctx, tripID)
 	if err != nil {
 		return err
 	}
 
 	newPayload := messaging.TripEventData{
-		Trip: trip.ToProto(),
+		Trip:             trip.ToProto(),
+		ExcludeDriverIDs: append(trip.ExcludedDriverIDs, driverID),
+	}
+
+	err = c.service.UpdateTrip(ctx, tripID, "pending", nil, &driverID)
+	if err != nil {
+		return err
 	}
 
 	marshalledPayload, err := json.Marshal(newPayload)
@@ -95,18 +100,15 @@ func (c *driverConsumer) handleTripDeclined(ctx context.Context, tripID, riderID
 }
 
 func (c *driverConsumer) handleTripAccepted(ctx context.Context, tripID string, driver *pbd.Driver) error {
-	// 1. Fetch the first
+	// 1. Fetch the trip
 	trip, err := c.service.GetTripByID(ctx, tripID)
 	if err != nil {
-		return err
-	}
-
-	if trip == nil {
-		return fmt.Errorf("Trip was not found %s", tripID)
+		// Stale message (e.g. after pod restart with in-memory store) — return error to Nack
+		return fmt.Errorf("trip not found, discarding stale message: %w", err)
 	}
 
 	// 2. Update the trip
-	if err := c.service.UpdateTrip(ctx, tripID, "accepted", driver); err != nil {
+	if err := c.service.UpdateTrip(ctx, tripID, "accepted", driver, nil); err != nil {
 		log.Printf("Failed to update the trip: %v", err)
 		return err
 	}
@@ -132,6 +134,7 @@ func (c *driverConsumer) handleTripAccepted(ctx context.Context, tripID string, 
 		return err
 	}
 
+	// Notify payment service to start a payment link
 	marshalledPayload, err := json.Marshal(messaging.PaymentTripResponseData{
 		TripID:   tripID,
 		UserID:   trip.UserID,

@@ -17,6 +17,12 @@ spec:
           image: github.com/trunglq04/goride/trip-service
           ports:
             - containerPort: 9093
+          env:
+            - name: RABBITMQ_URI
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: uri
           resources:
             requests:
               memory: "64Mi"
@@ -24,12 +30,18 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "200m"
-            env:
-              - name: RABBITMQ_URI
-                valueFrom:
-                  secretKeyRef:
-                    name: rabbitmq-credentials
-                    key: uri
+          # Health Probe (check if pod ready)
+          readinessProbe:
+            tcpSocket:
+              port: 9093
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9093
+            initialDelaySeconds: 15
+            periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service

@@ -55,7 +55,7 @@ func (cm *ConnectionManager) Add(id string, conn *websocket.Conn) {
 		mu:   sync.Mutex{},
 	}
 
-	log.Printf("Addded connection for user %s", id)
+	log.Printf("Added connection for user: %s", id)
 }
 
 func (cm *ConnectionManager) Remove(id string) {
@@ -63,7 +63,7 @@ func (cm *ConnectionManager) Remove(id string) {
 	defer cm.mu.Unlock()
 	delete(cm.connections, id)
 
-	log.Printf("Removed connection for user %s", id)
+	log.Printf("Removed connection for user: %s", id)
 }
 
 func (cm *ConnectionManager) Get(id string) (*websocket.Conn, bool) {

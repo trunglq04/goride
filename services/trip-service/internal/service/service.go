@@ -28,11 +28,12 @@ func NewService(repo domain.TripRepository) *service {
 
 func (s *service) CreateTrip(ctx context.Context, fare *domain.RideFareModel) (*domain.TripModel, error) {
 	t := &domain.TripModel{
-		ID:       primitive.NewObjectID(),
-		UserID:   fare.UserID,
-		Status:   "pending",
-		RideFare: fare,
-		Driver:   &trip.TripDriver{},
+		ID:                primitive.NewObjectID(),
+		UserID:            fare.UserID,
+		Status:            "pending",
+		RideFare:          fare,
+		Driver:            &trip.TripDriver{},
+		ExcludedDriverIDs: []string{},
 	}
 
 	return s.repo.CreateTrip(ctx, t)
@@ -186,6 +187,6 @@ func (s *service) GetTripByID(ctx context.Context, id string) (*domain.TripModel
 	return s.repo.GetTripByID(ctx, id)
 }
 
-func (s *service) UpdateTrip(ctx context.Context, tripID string, status string, driver *pbd.Driver) error {
-	return s.repo.UpdateTrip(ctx, tripID, status, driver)
+func (s *service) UpdateTrip(ctx context.Context, tripID string, status string, driver *pbd.Driver, excludedDriverID *string) error {
+	return s.repo.UpdateTrip(ctx, tripID, status, driver, excludedDriverID)
 }

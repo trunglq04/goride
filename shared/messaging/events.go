@@ -20,7 +20,8 @@ const (
 )
 
 type TripEventData struct {
-	Trip *pbt.Trip `json:"trip"`
+	Trip             *pbt.Trip `json:"trip"`
+	ExcludeDriverIDs []string  `json:"excludedDriverIDs,omitempty"`
 }
 
 type DriverTripResponseData struct {
