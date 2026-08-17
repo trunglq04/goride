@@ -1,22 +1,38 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: driver-service
+  name: payment-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: driver-service
+      app: payment-service
   template:
     metadata:
       labels:
-        app: driver-service
+        app: payment-service
     spec:
       containers:
-        - name: driver-service
-          image: github.com/trunglq04/goride/driver-service
+        - name: payment-service
+          image: goridecr.azurecr.io/goride/payment-service
           ports:
             - containerPort: 9092
+          env:
+            # - name: STRIPE_SECRET_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: stripe-secrets
+            #       key: stripe-secret-key
+            # - name: STRIPE_WEBHOOK_SECRET
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: stripe-webhook-secrets
+            #       key: stripe-webhook-secret-key
+            - name: RABBITMQ_URI
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: uri
           resources:
             requests:
               memory: "64Mi"
@@ -36,22 +52,16 @@ spec:
               port: 9092
             initialDelaySeconds: 15
             periodSeconds: 10
-          env:
-            - name: RABBITMQ_URI
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: RABBITMQ_URI
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: driver-service
+  name: payment-service
 spec:
   type: ClusterIP
   selector:
-    app: driver-service
+    app: payment-service
   ports:
     - port: 9092
-      name: grpc
+      name: http
       targetPort: 9092

@@ -28,8 +28,8 @@ spec:
             # Accessing an env variable from the app-config config map
             - name: GATEWAY_HTTP_ADDR
               valueFrom:
-                configMapKeyRef:
-                  name: app-config
+                secretKeyRef:
+                  name: app-secrets
                   key: GATEWAY_HTTP_ADDR
 ---
 apiVersion: v1

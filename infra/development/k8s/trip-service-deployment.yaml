@@ -17,12 +17,6 @@ spec:
           image: github.com/trunglq04/goride/trip-service
           ports:
             - containerPort: 9093
-          env:
-            - name: RABBITMQ_URI
-              valueFrom:
-                secretKeyRef:
-                  name: rabbitmq-credentials
-                  key: uri
           resources:
             requests:
               memory: "64Mi"
@@ -42,6 +36,12 @@ spec:
               port: 9093
             initialDelaySeconds: 15
             periodSeconds: 10
+          env:
+            - name: RABBITMQ_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: RABBITMQ_URI
 ---
 apiVersion: v1
 kind: Service
@@ -53,5 +53,5 @@ spec:
     app: trip-service
   ports:
     - port: 9093
-      name: http
+      name: grpc
       targetPort: 9093

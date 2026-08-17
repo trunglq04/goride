@@ -41,10 +41,9 @@ docker_build_with_restart(
 
 k8s_yaml('./infra/development/k8s/api-gateway-deployment.yaml')
 k8s_resource('api-gateway', port_forwards=8081,
-             resource_deps=['api-gateway-compile', 'trip-service', 'driver-service'], labels="services") # Add trip service and driver service to resource_deps to ensure them start before starting the API Gateway
+             resource_deps=['api-gateway-compile', 'trip-service', 'driver-service', 'payment-service'], labels="services") # Add trip service and driver service to resource_deps to ensure them start before starting the API Gateway
 ### End of API Gateway ###
 ### Trip Service ###
-
 
 trip_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/trip-service ./services/trip-service/cmd/main.go'
 if os.name == 'nt':
@@ -73,9 +72,8 @@ docker_build_with_restart(
 k8s_yaml('./infra/development/k8s/trip-service-deployment.yaml')
 k8s_resource('trip-service', resource_deps=['trip-service-compile', 'rabbitmq'], labels="services")
 
-### End of Driver Service ###
+### End of Trip Service ###
 ### Driver Service ###
-
 
 driver_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/driver-service ./services/driver-service/*.go'
 if os.name == 'nt':
@@ -105,6 +103,36 @@ k8s_yaml('./infra/development/k8s/driver-service-deployment.yaml')
 k8s_resource('driver-service', resource_deps=['driver-service-compile', 'rabbitmq'], labels="services")
 
 ### End of Driver Service ###
+### Payment Service ###
+
+payment_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/payment-service ./services/payment-service/cmd/main.go'
+if os.name == 'nt':
+ payment_compile_cmd = './infra/development/docker/payment-build.bat'
+
+local_resource(
+  'payment-service-compile',
+  payment_compile_cmd,
+  deps=['./services/payment-service', './shared'], labels="compiles")
+
+docker_build_with_restart(
+  'github.com/trunglq04/goride/payment-service',
+  '.',
+  entrypoint=['/app/build/payment-service'],
+  dockerfile='./infra/development/docker/payment-service.Dockerfile',
+  only=[
+    './build/payment-service',
+    './shared',
+  ],
+  live_update=[
+    sync('./build', '/app/build'),
+    sync('./shared', '/app/shared'),
+  ],
+)
+
+k8s_yaml('./infra/development/k8s/payment-service-deployment.yaml')
+k8s_resource('payment-service', resource_deps=['payment-service-compile', 'rabbitmq'], labels="services")
+
+### End of Payment Service ###
 ### Web Frontend ###
 
 docker_build(

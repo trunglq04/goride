@@ -38,6 +38,7 @@ require (
 require (
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/rabbitmq/amqp091-go v1.13.0 // indirect
+	github.com/stripe/stripe-go/v86 v86.3.0 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.8.0 // indirect
 )
 
@@ -50,6 +51,7 @@ require (
 )
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/mmcloughlin/geohash v0.10.0
 	go.mongodb.org/mongo-driver v1.17.9
 )

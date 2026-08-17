@@ -16,11 +16,10 @@ import (
 var GrpcAddr = ":9092"
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
