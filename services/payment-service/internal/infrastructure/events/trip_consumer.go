@@ -24,29 +24,31 @@ func NewTripConsumer(rabbitmq *messaging.RabbitMQ, service domain.Service) *Trip
 }
 
 func (c *TripConsumer) Listen() error {
-	return c.rabbitmq.ConsumeMessages(messaging.PaymentTripResponseQueue, func(ctx context.Context, msg amqp091.Delivery) error {
-		var message contracts.AmqpMessage
-		if err := json.Unmarshal(msg.Body, &message); err != nil {
-			log.Printf("Failed to unmarshal message: %v", err)
-			return err
-		}
-
-		var payload messaging.PaymentTripResponseData
-		if err := json.Unmarshal(message.Data, &payload); err != nil {
-			log.Printf("Failed to unmarshal payload: %v", err)
-			return err
-		}
-
-		switch msg.RoutingKey {
-		case contracts.PaymentCmdCreateSession:
-			if err := c.handleTripAccepted(ctx, payload); err != nil {
-				log.Printf("Failed to handle trip accepted: %v", err)
+	return c.rabbitmq.ConsumeMessages(
+		messaging.PaymentTripResponseQueue,
+		func(ctx context.Context, msg amqp091.Delivery) error {
+			var message contracts.AmqpMessage
+			if err := json.Unmarshal(msg.Body, &message); err != nil {
+				log.Printf("Failed to unmarshal message: %v", err)
 				return err
 			}
-		}
 
-		return nil
-	})
+			var payload messaging.PaymentTripResponseData
+			if err := json.Unmarshal(message.Data, &payload); err != nil {
+				log.Printf("Failed to unmarshal payload: %v", err)
+				return err
+			}
+
+			switch msg.RoutingKey {
+			case contracts.PaymentCmdCreateSession:
+				if err := c.handleTripAccepted(ctx, payload); err != nil {
+					log.Printf("Failed to handle trip accepted: %v", err)
+					return err
+				}
+			}
+
+			return nil
+		})
 }
 
 func (c *TripConsumer) handleTripAccepted(ctx context.Context, payload messaging.PaymentTripResponseData) error {
@@ -81,7 +83,8 @@ func (c *TripConsumer) handleTripAccepted(ctx context.Context, payload messaging
 		return err
 	}
 
-	if err := c.rabbitmq.PublishMessage(ctx, contracts.PaymentEventSessionCreated,
+	if err := c.rabbitmq.PublishMessage(ctx,
+		contracts.PaymentEventSessionCreated,
 		contracts.AmqpMessage{
 			OwnerID: payload.UserID,
 			Data:    payloadBytes,

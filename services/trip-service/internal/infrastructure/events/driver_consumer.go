@@ -103,8 +103,7 @@ func (c *driverConsumer) handleTripAccepted(ctx context.Context, tripID string, 
 	// 1. Fetch the trip
 	trip, err := c.service.GetTripByID(ctx, tripID)
 	if err != nil {
-		// Stale message (e.g. after pod restart with in-memory store) — return error to Nack
-		return fmt.Errorf("trip not found, discarding stale message: %w", err)
+		return fmt.Errorf("trip not found: %w", err)
 	}
 
 	// 2. Update the trip

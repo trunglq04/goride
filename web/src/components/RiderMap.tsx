@@ -34,7 +34,7 @@ const userMarker = new L.Icon({
   iconUrl:
     "data:image/svg+xml;utf8," +
     encodeURIComponent(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#e11d48" stroke="#fff" stroke-width="1.5"><path d="M12 2C7.6 2 4 5.6 4 10c0 5.5 7.3 11.5 7.6 11.7.2.2.6.2.8 0C12.7 21.5 20 15.5 20 10c0-4.4-3.6-8-8-8zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>`
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#e11d48" stroke="#fff" stroke-width="1.5"><path d="M12 2C7.6 2 4 5.6 4 10c0 5.5 7.3 11.5 7.6 11.7.2.2.6.2.8 0C12.7 21.5 20 15.5 20 10c0-4.4-3.6-8-8-8zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>`,
     ),
   iconSize: [40, 40], // Size of the marker
   iconAnchor: [20, 40], // Anchor point
@@ -93,7 +93,7 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
       console.log(data);
 
       const parsedRoute = data.route.geometry[0].coordinates.map(
-        (coord) => [coord.longitude, coord.latitude] as [number, number]
+        (coord) => [coord.longitude, coord.latitude] as [number, number],
       );
 
       setTrip({
@@ -110,7 +110,7 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
   };
 
   const requestRidePreview = async (
-    props: RequestRideProps
+    props: RequestRideProps,
   ): Promise<HTTPTripPreviewResponse> => {
     const { pickup, destination } = props;
     const payload = {
@@ -150,7 +150,9 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    const data = (await response.json()) as HTTPTripStartResponse;
+    const { data } = (await response.json()) as {
+      data: HTTPTripStartResponse;
+    };
 
     if (response.ok && trip) {
       setTrip(
@@ -158,7 +160,7 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
           ({
             ...prev,
             tripID: data.tripID,
-          }) as TripPreview
+          }) as TripPreview,
       );
     }
 

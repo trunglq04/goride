@@ -61,49 +61,81 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		return fmt.Errorf("Failed to declare exchange %s: %v", TripExchange, err)
 	}
 
-	if err := r.declareAndBindQueue(
+	err = r.declareAndBindQueue(
 		FindAvailableDriversQueue, // queue name
 		[]string{ // routing keys
 			contracts.TripEventCreated,
 			contracts.TripEventDriverNotInterested,
 		}, // message types
 		TripExchange, // exchange
-	); err != nil {
+	)
+	if err != nil {
 		return err
 	}
 
-	if err := r.declareAndBindQueue(
+	err = r.declareAndBindQueue(
 		DriverCmdTripRequestQueue,
 		[]string{contracts.DriverCmdTripRequest},
 		TripExchange,
-	); err != nil {
+	)
+	if err != nil {
 		return err
 	}
 
-	if err := r.declareAndBindQueue(
+	err = r.declareAndBindQueue(
 		DriverTripResponseQueue,
 		[]string{
 			contracts.DriverCmdTripAccept,
 			contracts.DriverCmdTripDecline,
 		},
 		TripExchange,
-	); err != nil {
+	)
+	if err != nil {
 		return err
 	}
 
-	if err := r.declareAndBindQueue(
+	err = r.declareAndBindQueue(
 		NotifyDriverNoDriversFoundQueue,
 		[]string{contracts.TripEventNoDriversFound},
 		TripExchange,
-	); err != nil {
+	)
+	if err != nil {
 		return err
 	}
 
-	if err := r.declareAndBindQueue(
+	err = r.declareAndBindQueue(
 		NotifyDriverAssignQueue,
 		[]string{contracts.TripEventDriverAssigned},
 		TripExchange,
-	); err != nil {
+	)
+	if err != nil {
+		return err
+	}
+
+	err = r.declareAndBindQueue(
+		PaymentTripResponseQueue,
+		[]string{contracts.PaymentCmdCreateSession},
+		TripExchange,
+	)
+	if err != nil {
+		return err
+	}
+
+	err = r.declareAndBindQueue(
+		NotifyPaymentSessionCreatedQueue,
+		[]string{contracts.PaymentEventSessionCreated},
+		TripExchange,
+	)
+	if err != nil {
+		return err
+	}
+
+	err = r.declareAndBindQueue(
+		NotifyPaymentSuccessQueue,
+		[]string{contracts.PaymentEventSuccess},
+		TripExchange,
+	)
+	if err != nil {
 		return err
 	}
 

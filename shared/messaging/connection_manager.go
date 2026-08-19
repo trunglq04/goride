@@ -44,12 +44,14 @@ func (cm *ConnectionManager) Upgrade(c *gin.Context) (*websocket.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return conn, nil
 }
 
 func (cm *ConnectionManager) Add(id string, conn *websocket.Conn) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
+
 	cm.connections[id] = &connWrapper{
 		conn: conn,
 		mu:   sync.Mutex{},
@@ -61,6 +63,7 @@ func (cm *ConnectionManager) Add(id string, conn *websocket.Conn) {
 func (cm *ConnectionManager) Remove(id string) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
+
 	delete(cm.connections, id)
 
 	log.Printf("Removed connection for user: %s", id)
@@ -69,6 +72,7 @@ func (cm *ConnectionManager) Remove(id string) {
 func (cm *ConnectionManager) Get(id string) (*websocket.Conn, bool) {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
+
 	wrapper, exists := cm.connections[id]
 	if !exists {
 		return nil, false

@@ -93,5 +93,4 @@ func (s *Service) UnregisterDriver(driverId string) {
 			log.Println("Succesfully UNREGISTER a DRIVER:", driverId)
 		}
 	}
-
 }

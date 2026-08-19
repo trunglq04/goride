@@ -40,9 +40,9 @@ func handleRidersWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 
 	// Initialize queue consumers
 	queues := []string{
-		messaging.NotifyDriverNoDriversFoundQueue, // When no drivers found
-		messaging.NotifyDriverAssignQueue,         // When a driver is assigned to the trip
-		// messaging.NotifyPaymentSessionCreatedQueue, // When a payment session is created
+		messaging.NotifyDriverNoDriversFoundQueue,  // When no drivers found
+		messaging.NotifyDriverAssignQueue,          // When a driver is assigned to the trip
+		messaging.NotifyPaymentSessionCreatedQueue, // When a payment session is created
 	}
 
 	for _, q := range queues {
@@ -51,12 +51,12 @@ func handleRidersWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 		if err := consumer.Start(); err != nil {
 			log.Printf("Failed to start rider consumer for queue: %s: err: %v", q, err)
 		}
-	} 
+	}
 
 	for {
 		_, message, err := wsConn.ReadMessage()
 		if err != nil {
-			log.Printf("Error reading message: %v", err)
+			log.Printf("(Rider) Error reading message: %v", err)
 			break
 		}
 
@@ -148,7 +148,7 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 	for {
 		_, message, err := wsConn.ReadMessage()
 		if err != nil {
-			log.Printf("Error reading message: %v", err)
+			log.Printf("(Driver) Error reading message: %v", err)
 			break
 		}
 

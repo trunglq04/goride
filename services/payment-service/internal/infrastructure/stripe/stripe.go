@@ -35,7 +35,7 @@ func (s *stripeClient) CreatePaymentSession(ctx context.Context, amount int64, c
 					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
 						Name: stripe.String("Ride Payment"),
 					},
-					UnitAmount: stripe.Int64(amount), // Price in cents
+					UnitAmount: stripe.Int64(amount), // Price in dollars
 				},
 				Quantity: stripe.Int64(1),
 			},

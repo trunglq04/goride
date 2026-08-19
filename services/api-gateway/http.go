@@ -1,11 +1,17 @@
 package main
 
 import (
+	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 
+	"github.com/stripe/stripe-go/v86"
+	"github.com/stripe/stripe-go/v86/webhook"
 	"github.com/trunglq04/goride/services/api-gateway/grpc_clients"
 	"github.com/trunglq04/goride/shared/contracts"
+	"github.com/trunglq04/goride/shared/env"
+	"github.com/trunglq04/goride/shared/messaging"
 
 	"github.com/gin-gonic/gin"
 )
@@ -57,11 +63,8 @@ func handleTripPreview(c *gin.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// avoid resource leaks
 	defer tripService.Close()
 
-	// resp, err := http.Post("http://trip-service:8083/preview", "application/json", reader)
 	tripPreview, err := tripService.Client.PreviewTrip(c, reqBody.toProto())
 	if err != nil {
 		log.Print(err)
@@ -72,4 +75,77 @@ func handleTripPreview(c *gin.Context) {
 	response := contracts.APIResponse{Data: tripPreview}
 
 	c.JSON(http.StatusCreated, response)
+}
+
+func handleStripeWebhook(c *gin.Context, rb *messaging.RabbitMQ) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Print(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read body"})
+		return
+	}
+	defer c.Request.Body.Close()
+
+	webhookKey := env.GetString("STRIPE_WEBHOOK_KEY", "")
+	if webhookKey == "" {
+		log.Printf("Webhook key is required")
+		return
+	}
+
+	event, err := webhook.ConstructEventWithOptions(
+		body,
+		c.GetHeader("Stripe-Signature"),
+		webhookKey,
+		webhook.ConstructEventOptions{
+			IgnoreAPIVersionMismatch: true,
+		},
+	)
+	if err != nil {
+		log.Printf("Error verifying webhook signature: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid signature"})
+		return
+	}
+
+	log.Printf("Received Stripe event: %v", event)
+
+	switch event.Type {
+	case stripe.EventTypeCheckoutSessionCompleted:
+		var session stripe.CheckoutSession
+		err := json.Unmarshal(event.Data.Raw, &session)
+		if err != nil {
+			log.Printf("Error parsing webhook JSON: %v", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload"})
+			return
+		}
+
+		payload := messaging.PaymentStatusUpdateData{
+			TripID:   session.Metadata["trip_id"],
+			UserID:   session.Metadata["user_id"],
+			DriverID: session.Metadata["driver_id"],
+		}
+
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			log.Printf("Error marshalling payload: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to marshal payload"})
+			return
+		}
+
+		message := contracts.AmqpMessage{
+			OwnerID: session.Metadata["user_id"],
+			Data:    payloadBytes,
+		}
+
+		if err := rb.PublishMessage(
+			c,
+			contracts.PaymentEventSuccess,
+			message,
+		); err != nil {
+			log.Printf("Error publishing payment event: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to publish payment event"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"status": "success"})
+	}
 }

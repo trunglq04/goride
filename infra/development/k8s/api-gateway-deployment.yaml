@@ -25,12 +25,17 @@ spec:
               memory: "128Mi"
               cpu: "125m"
           env:
-            # Accessing an env variable from the app-config config map
             - name: GATEWAY_HTTP_ADDR
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: GATEWAY_HTTP_ADDR
+          env:
+            - name: STRIPE_WEBHOOK_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: STRIPE_WEBHOOK_KEY
 ---
 apiVersion: v1
 kind: Service

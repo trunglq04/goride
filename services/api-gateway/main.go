@@ -38,9 +38,14 @@ func main() {
 	trip.POST("/preview", enableCORS(handleTripPreview))
 	trip.POST("/start", enableCORS(handleTripStart))
 
+	// WebSocket
 	ws := router.Group("/ws")
 	ws.GET("/drivers", func(c *gin.Context) { handleDriversWebSocket(c, rabbitmq) })
 	ws.GET("/riders", func(c *gin.Context) { handleRidersWebSocket(c, rabbitmq) })
+
+	// Webhook
+	wh := router.Group("/webhook")
+	wh.POST("/stripe", func(c *gin.Context) { handleStripeWebhook(c, rabbitmq) })
 
 	server := &http.Server{
 		Addr:    httpAddr,

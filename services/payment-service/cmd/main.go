@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/trunglq04/goride/services/payment-service/internal/events"
+	"github.com/trunglq04/goride/services/payment-service/internal/infrastructure/events"
 	"github.com/trunglq04/goride/services/payment-service/internal/infrastructure/stripe"
 	"github.com/trunglq04/goride/services/payment-service/internal/service"
 	"github.com/trunglq04/goride/services/payment-service/pkg/types"
