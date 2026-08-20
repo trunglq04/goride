@@ -1,9 +1,9 @@
 package grpc_clients
 
 import (
-	"os"
-
+	"github.com/trunglq04/goride/shared/env"
 	pb "github.com/trunglq04/goride/shared/proto/trip"
+	"github.com/trunglq04/goride/shared/tracing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -16,11 +16,13 @@ type tripServiceClient struct {
 }
 
 func NewTripServiceClient() (*tripServiceClient, error) {
-	tripServiceURL := os.Getenv("TRIP_SERVICE_URL") // container name setup in infra
-	if tripServiceURL == "" {
-		tripServiceURL = "trip-service:9093"
-	}
-	conn, err := grpc.NewClient(tripServiceURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	tripServiceURL := env.GetString("TRIP_SERVICE_URL", "trip-service:9093")
+
+	dialOptions := append(
+		tracing.DialOptionsWithTracing(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	conn, err := grpc.NewClient(tripServiceURL, dialOptions...)
 	if err != nil {
 		return nil, err
 	}

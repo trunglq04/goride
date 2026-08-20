@@ -28,6 +28,7 @@ import {
   HTTPTripPreviewRequestPayload,
   HTTPTripPreviewResponse,
   HTTPTripStartRequestPayload,
+  TripEvents,
 } from "../contracts";
 
 const userMarker = new L.Icon({
@@ -70,6 +71,7 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
     assignedDriver,
     paymentSession,
     resetTripStatus,
+    setTripStatus,
   } = useRiderStreamConnection(location, userID);
 
   console.log(tripStatus);
@@ -162,6 +164,7 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
             tripID: data.tripID,
           }) as TripPreview,
       );
+      setTripStatus(TripEvents.Created);
     }
 
     return data;

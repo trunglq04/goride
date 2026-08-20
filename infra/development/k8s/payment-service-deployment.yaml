@@ -54,6 +54,13 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: RABBITMQ_URI
+
+            # Jaeger credentials
+            - name: JAEGER_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: JAEGER_ENDPOINT
 ---
 apiVersion: v1
 kind: Service

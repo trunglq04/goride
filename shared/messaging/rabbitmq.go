@@ -9,6 +9,7 @@ import (
 
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/trunglq04/goride/shared/contracts"
+	"github.com/trunglq04/goride/shared/tracing"
 )
 
 const (
@@ -24,13 +25,13 @@ type RabbitMQ struct {
 func NewRabbitMQ(uri string) (*RabbitMQ, error) {
 	conn, err := amqp091.Dial(uri)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to connect to RabbitMQ: %v", err)
+		return nil, fmt.Errorf("failed to connect to RabbitMQ: %v", err)
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
 		err := conn.Close()
-		return nil, fmt.Errorf("Failed to create  RabbitMQ channel : %v", err)
+		return nil, fmt.Errorf("failed to create  RabbitMQ channel : %v", err)
 	}
 
 	rmq := &RabbitMQ{
@@ -41,7 +42,7 @@ func NewRabbitMQ(uri string) (*RabbitMQ, error) {
 	// Setup the exchange and queues
 	if err := rmq.setupExchangesAndQueues(); err != nil {
 		rmq.Close()
-		return nil, fmt.Errorf("Failed to setup exchanges and queues: %v", err)
+		return nil, fmt.Errorf("failed to setup exchanges and queues: %v", err)
 	}
 
 	return rmq, nil
@@ -58,7 +59,7 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		nil,          // arguments
 	)
 	if err != nil {
-		return fmt.Errorf("Failed to declare exchange %s: %v", TripExchange, err)
+		return fmt.Errorf("failed to declare exchange %s: %v", TripExchange, err)
 	}
 
 	err = r.declareAndBindQueue(
@@ -165,7 +166,7 @@ func (r *RabbitMQ) declareAndBindQueue(queueName string, messageTypes []string, 
 			false,
 			nil,
 		); err != nil {
-			return fmt.Errorf("Failed to bind queue to %s: %v", queueName, err)
+			return fmt.Errorf("failed to bind queue to %s: %v", queueName, err)
 		}
 	}
 
@@ -187,22 +188,29 @@ func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, messag
 
 	jsonMsg, err := json.Marshal(message)
 	if err != nil {
-		return fmt.Errorf("Failed to marshal message: %v", err)
+		return fmt.Errorf("failed to marshal message: %v", err)
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	msg := amqp091.Publishing{
+		DeliveryMode: amqp091.Persistent,
+		ContentType:  "application/json",
+		Body:         jsonMsg,
+	}
+
+	return tracing.TracedPublisher(ctx, TripExchange, routingKey, msg, r.publish)
+}
+
+func (r *RabbitMQ) publish(ctx context.Context, exchange, routingKey string, msg amqp091.Publishing) error {
 	return r.Channel.PublishWithContext(ctx,
 		TripExchange, // exchange
 		routingKey,   // routing key
 		false,        // mandatory
 		false,        // immediate
-		amqp091.Publishing{
-			ContentType:  "application/json",
-			Body:         jsonMsg,
-			DeliveryMode: amqp091.Persistent,
-		})
+		msg,          // amqp091.Publishing
+	)
 }
 
 type MessageHandler func(context.Context, amqp091.Delivery) error
@@ -217,7 +225,7 @@ func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) err
 		false, // global: Apply prefetchCount to each consumer individually
 	)
 	if err != nil {
-		return fmt.Errorf("Failed to set QoS: %v", err)
+		return fmt.Errorf("failed to set QoS: %v", err)
 	}
 
 	msgs, err := r.Channel.Consume(
@@ -230,24 +238,34 @@ func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) err
 		nil,       // args
 	)
 	if err != nil {
-		return fmt.Errorf("Failed to consume a message: %v", err)
+		return fmt.Errorf("failed to consume a message: %v", err)
 	}
-
-	ctx := context.Background()
 
 	go func() {
 		for msg := range msgs {
-			log.Printf("Received a message: %s", msg.Body)
 
-			if err := handler(ctx, msg); err != nil {
+			if err := tracing.TracedConsumer(msg, func(ctx context.Context, d amqp091.Delivery) error {
+				log.Printf("Received a message: %s", msg.Body)
+
+				if err := handler(ctx, msg); err != nil {
+					log.Printf("Failed to handle the message: %v", err)
+					// Nack without requeue — discard poison message to avoid crash loop
+					msg.Nack(false, false)
+
+					return err
+				}
+
+				// Ack only on success
+				if ackErr := msg.Ack(false); ackErr != nil {
+					log.Printf("Failed to ack the message: %v. Message body: %s", ackErr, msg.Body)
+					return ackErr
+				}
+
+				return nil
+			}); err != nil {
 				log.Printf("Failed to handle the message: %v", err)
-				// Nack without requeue — discard poison message to avoid crash loop
-				msg.Nack(false, false)
-				continue
 			}
 
-			// Ack only on success
-			msg.Ack(false)
 		}
 	}()
 

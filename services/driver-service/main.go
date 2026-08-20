@@ -10,16 +10,32 @@ import (
 
 	"github.com/trunglq04/goride/shared/env"
 	"github.com/trunglq04/goride/shared/messaging"
+	"github.com/trunglq04/goride/shared/tracing"
+
 	grpcserver "google.golang.org/grpc"
 )
 
 var GrpcAddr = ":9092"
 
 func main() {
+	// Initialize Tracing
+	tracerCfg := tracing.Config{
+		ServiceName:    "driver-service",
+		Environment:    env.GetString("ENVIRONMENT", "developement"),
+		JaegerEndpoint: env.GetString("JAEGER_ENDPOINT", "jaeger:14268/api/traces"),
+	}
+
+	traceShutdown, err := tracing.InitTracer(tracerCfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize the tracer: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer traceShutdown(ctx)
+	defer cancel()
+
 	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// Handle graceful shutdown
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
@@ -32,7 +48,7 @@ func main() {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 
-	service := NewService()
+	svc := NewService()
 
 	// RabbitMQ connection
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
@@ -44,12 +60,12 @@ func main() {
 	log.Println("Starting RabbitMQ connection")
 
 	// Starting the gRPC server
-	grpcServer := grpcserver.NewServer()
-	NewGrpcHandler(grpcServer, service)
+	grpcServer := grpcserver.NewServer(tracing.WithTracingInterceptors()...)
+	NewGrpcHandler(grpcServer, svc)
 
-	consumer := NewTripConsumer(rabbitmq, service)
+	tripConsumer := NewTripConsumer(rabbitmq, svc)
 	go func() {
-		if err := consumer.Listen(); err != nil {
+		if err := tripConsumer.Listen(); err != nil {
 			log.Fatalf("Failed to listen to the message: %v", err)
 		}
 	}()

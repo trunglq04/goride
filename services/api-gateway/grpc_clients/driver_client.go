@@ -1,9 +1,9 @@
 package grpc_clients
 
 import (
-	"os"
-
+	"github.com/trunglq04/goride/shared/env"
 	pb "github.com/trunglq04/goride/shared/proto/driver"
+	"github.com/trunglq04/goride/shared/tracing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -15,12 +15,13 @@ type driverServiceClient struct {
 }
 
 func NewDriverServiceClient() (*driverServiceClient, error) {
-	driverServiceURL := os.Getenv("DRIVER_SERVICE_URL")
-	if driverServiceURL == "" {
-		driverServiceURL = "driver-service:9092"
-	}
+	driverServiceURL := env.GetString("DRIVER_SERVICE_URL", "driver-service:9092")
 
-	conn, err := grpc.NewClient(driverServiceURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	dialOptions := append(
+		tracing.DialOptionsWithTracing(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	conn, err := grpc.NewClient(driverServiceURL, dialOptions...)
 	if err != nil {
 		return nil, err
 	}

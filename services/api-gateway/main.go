@@ -12,6 +12,8 @@ import (
 
 	"github.com/trunglq04/goride/shared/env"
 	"github.com/trunglq04/goride/shared/messaging"
+	"github.com/trunglq04/goride/shared/tracing"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,8 +26,26 @@ var (
 func main() {
 	log.Println("Starting API Gateway")
 
+	// Initialize Tracing
+	tracerCfg := tracing.Config{
+		ServiceName:    "api-gateway",
+		Environment:    env.GetString("ENVIRONMENT", "developement"),
+		JaegerEndpoint: env.GetString("JAEGER_ENDPOINT", "jaeger:4317"),
+	}
+
+	traceShutdown, err := tracing.InitTracer(tracerCfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize the tracer: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer traceShutdown(ctx)
+	defer cancel()
+
+	log.Println("Init tracing successfully!")
+
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
+	router.Use(otelgin.Middleware(tracerCfg.ServiceName))
 
 	// RabbitMQ connection
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)

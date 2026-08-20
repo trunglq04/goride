@@ -14,6 +14,7 @@ import (
 	"github.com/trunglq04/goride/services/trip-service/internal/service"
 	"github.com/trunglq04/goride/shared/env"
 	"github.com/trunglq04/goride/shared/messaging"
+	"github.com/trunglq04/goride/shared/tracing"
 
 	grpcserver "google.golang.org/grpc"
 )
@@ -21,9 +22,22 @@ import (
 var GrpcAddr = ":9093"
 
 func main() {
-	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
+	// Initialize Tracing
+	tracerCfg := tracing.Config{
+		ServiceName:    "trip-service",
+		Environment:    env.GetString("ENVIRONMENT", "developement"),
+		JaegerEndpoint: env.GetString("JAEGER_ENDPOINT", "http://jaeger:4318"),
+	}
+
+	traceShutdown, err := tracing.InitTracer(tracerCfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize the tracer: %v", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
+	defer traceShutdown(ctx)
 	defer cancel()
+
+	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)
@@ -53,14 +67,22 @@ func main() {
 
 	// Start driver consumer
 	driverConsumer := events.NewDriverConsumer(rabbitmq, svc)
-	go driverConsumer.Listen()
+	go func() {
+		if err := driverConsumer.Listen(); err != nil {
+			log.Fatalf("Failed to listen to the message: %v", err)
+		}
+	}()
 
 	// Start payment consumer
 	paymentConsumer := events.NewPaymentConsumer(rabbitmq, svc)
-	go paymentConsumer.Listen()
-
+	go func() {
+		if err := paymentConsumer.Listen(); err != nil {
+			log.Fatalf("Failed to listen to the message: %v", err)
+		}
+	}()
+	
 	// Starting the gRPC server
-	grpcServer := grpcserver.NewServer()
+	grpcServer := grpcserver.NewServer(tracing.WithTracingInterceptors()...)
 	grpc.NewGRPCHandler(grpcServer, svc, publisher)
 
 	log.Printf("Starting gRPC server Trip service on port %s", lis.Addr().String())

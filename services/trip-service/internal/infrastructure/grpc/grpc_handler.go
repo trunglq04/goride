@@ -47,7 +47,7 @@ func (h *gRPCHandler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest)
 		return nil, status.Errorf(codes.Internal, "Failed to create trip: %v", err)
 	}
 	// 3. Initialize an empty driver to the trip.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	if err = h.publisher.PublishTripCreated(ctx, trip); err != nil {
@@ -71,6 +71,9 @@ func (h *gRPCHandler) PreviewTrip(ctx context.Context, rq *pb.PreviewTripRequest
 		Latitude:  pbDestination.Latitude,
 		Longitude: pbDestination.Longitude,
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
 	route, err := h.service.GetRoute(ctx, pickup, destination, true)
 	if err != nil {

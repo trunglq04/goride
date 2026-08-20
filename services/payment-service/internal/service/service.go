@@ -31,7 +31,7 @@ func (s *paymentService) CreatePaymentSession(ctx context.Context, tripID string
 
 	sessionID, err := s.paymentProcessor.CreatePaymentSession(ctx, amount, currency, metadata)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create payment session: %w", err)
+		return nil, fmt.Errorf("failed to create payment session: %w", err)
 	}
 
 	paymentIntent := &types.PaymentIntent{

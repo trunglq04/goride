@@ -17,6 +17,8 @@ import (
 )
 
 func handleTripStart(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	var reqBody startTripRequest
 	if err := c.ShouldBindBodyWithJSON(&reqBody); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse JSON data"})
@@ -30,7 +32,7 @@ func handleTripStart(c *gin.Context) {
 
 	defer tripService.Close()
 
-	tripStart, err := tripService.Client.CreateTrip(c, reqBody.toProto())
+	tripStart, err := tripService.Client.CreateTrip(ctx, reqBody.toProto())
 	if err != nil {
 		log.Print(err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to call trip start"})
@@ -44,6 +46,8 @@ func handleTripStart(c *gin.Context) {
 }
 
 func handleTripPreview(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	var reqBody previewTripRequest
 	if err := c.ShouldBindJSON(&reqBody); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse JSON data"})
@@ -56,16 +60,14 @@ func handleTripPreview(c *gin.Context) {
 		return
 	}
 
-	// Why we need to create a new client for each connection:
-	// because if a service is down, we don't want to block the whole application
-	// so we create a new client for each connection
+	// so we create a new client for each connection to avoid server crashing
 	tripService, err := grpc_clients.NewTripServiceClient()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer tripService.Close()
 
-	tripPreview, err := tripService.Client.PreviewTrip(c, reqBody.toProto())
+	tripPreview, err := tripService.Client.PreviewTrip(ctx, reqBody.toProto())
 	if err != nil {
 		log.Print(err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to call trip preview"})
@@ -78,6 +80,8 @@ func handleTripPreview(c *gin.Context) {
 }
 
 func handleStripeWebhook(c *gin.Context, rb *messaging.RabbitMQ) {
+	ctx := c.Request.Context()
+
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		log.Print(err)
@@ -137,7 +141,7 @@ func handleStripeWebhook(c *gin.Context, rb *messaging.RabbitMQ) {
 		}
 
 		if err := rb.PublishMessage(
-			c,
+			ctx,
 			contracts.PaymentEventSuccess,
 			message,
 		); err != nil {
@@ -147,5 +151,9 @@ func handleStripeWebhook(c *gin.Context, rb *messaging.RabbitMQ) {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"status": "success"})
+	default:
+		// Acknowledge all other event types — returning non-2xx causes Stripe to retry
+		log.Printf("Unhandled Stripe event type: %s (ignored)", event.Type)
+		c.JSON(http.StatusOK, gin.H{"received": true})
 	}
 }

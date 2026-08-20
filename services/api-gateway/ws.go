@@ -18,14 +18,14 @@ var connManager = messaging.NewConnectionManager()
 func handleRidersWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 	wsConn, err := connManager.Upgrade(c)
 	if err != nil {
-		log.Printf("WebSocket upgrade Failed: %v", err)
+		log.Printf("WebSocket upgrade failed: %v", err)
 		return
 	}
 
 	defer func(wsConn *websocket.Conn) {
 		err := wsConn.Close()
 		if err != nil {
-			log.Printf("WebSocket close Failed: %v", err)
+			log.Printf("WebSocket close failed: %v", err)
 		}
 	}(wsConn)
 

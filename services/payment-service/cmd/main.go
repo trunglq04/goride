@@ -13,12 +13,25 @@ import (
 	"github.com/trunglq04/goride/services/payment-service/pkg/types"
 	"github.com/trunglq04/goride/shared/env"
 	"github.com/trunglq04/goride/shared/messaging"
+	"github.com/trunglq04/goride/shared/tracing"
 )
 
 var GrpcAddr = env.GetString("GRPC_ADDR", ":9004")
 
 func main() {
+	// Initialize Tracing
+	tracerCfg := tracing.Config{
+		ServiceName:    "payment-service",
+		Environment:    env.GetString("ENVIRONMENT", "developement"),
+		JaegerEndpoint: env.GetString("JAEGER_ENDPOINT", "jaeger:14268/api/traces"),
+	}
+
+	traceShutdown, err := tracing.InitTracer(tracerCfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize the tracer: %v", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
+	defer traceShutdown(ctx)
 	defer cancel()
 
 	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
