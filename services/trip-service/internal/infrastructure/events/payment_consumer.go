@@ -29,13 +29,13 @@ func (c *paymentConsumer) Listen() error {
 		func(ctx context.Context, msg amqp091.Delivery) error {
 			var message contracts.AmqpMessage
 			if err := json.Unmarshal(msg.Body, &message); err != nil {
-				log.Printf("Failed to unmarshal message: %v", err)
+				log.Printf("ERROR: Failed to unmarshal message: %v", err)
 				return err
 			}
 
 			var payload messaging.PaymentStatusUpdateData
 			if err := json.Unmarshal(message.Data, &payload); err != nil {
-				log.Printf("Failed to unmarshal payload: %v", err)
+				log.Printf("ERROR: Failed to unmarshal payload: %v", err)
 				return err
 			}
 

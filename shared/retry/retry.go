@@ -30,7 +30,7 @@ func WithBackoff(ctx context.Context, cfg Config, operation func() error) error 
 	var err error
 	wait := cfg.InitialWait
 
-	for attempt := 0; attempt <= cfg.MaxRetries; attempt++ {
+	for attempt := 1; attempt <= cfg.MaxRetries; attempt++ {
 		if attempt > 0 {
 			log.Printf("Retry attempt %d/%d after %v", attempt, cfg.MaxRetries, wait)
 
@@ -51,7 +51,7 @@ func WithBackoff(ctx context.Context, cfg Config, operation func() error) error 
 			return nil
 		}
 
-		log.Printf("Operation Failed (attempt %d/%d): %v", attempt+1, cfg.MaxRetries, err)
+		log.Printf("Operation Failed (attempt %d/%d): %v", attempt, cfg.MaxRetries, err)
 	}
 
 	return err

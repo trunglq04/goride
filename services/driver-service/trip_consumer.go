@@ -29,13 +29,13 @@ func (c *TripConsumer) Listen() error {
 		func(ctx context.Context, msg amqp091.Delivery) error {
 			var tripEvent contracts.AmqpMessage
 			if err := json.Unmarshal(msg.Body, &tripEvent); err != nil {
-				log.Printf("Failed to unmarshal message: %v", err)
+				log.Printf("ERROR: Failed to unmarshal message: %v", err)
 				return err
 			}
 
 			var payload messaging.TripEventData
 			if err := json.Unmarshal(tripEvent.Data, &payload); err != nil {
-				log.Printf("Failed to unmarshal payload: %v", err)
+				log.Printf("ERROR: Failed to unmarshal payload: %v", err)
 				return err
 			}
 
@@ -70,7 +70,7 @@ func (c *TripConsumer) handleFindAndNotifyDrivers(ctx context.Context, payload m
 			contracts.AmqpMessage{
 				OwnerID: payload.Trip.UserID,
 			}); err != nil {
-			log.Printf("Failed to publish message to exchange: %v", err)
+			log.Printf("ERROR: Failed to publish message to exchange: %v", err)
 			return err
 		}
 
@@ -92,7 +92,7 @@ func (c *TripConsumer) handleFindAndNotifyDrivers(ctx context.Context, payload m
 			OwnerID: suitableDriverID,
 			Data:    marshalledEvent,
 		}); err != nil {
-		log.Printf("Failed to publish message to exchange: %v", err)
+		log.Printf("ERROR: Failed to publish message to exchange: %v", err)
 		return err
 	}
 

@@ -9,11 +9,13 @@ import (
 
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/trunglq04/goride/shared/contracts"
+	"github.com/trunglq04/goride/shared/retry"
 	"github.com/trunglq04/goride/shared/tracing"
 )
 
 const (
-	TripExchange = "trip"
+	TripExchange       = "trip"
+	DeadLetterExchange = "dlx"
 )
 
 type RabbitMQ struct {
@@ -48,7 +50,169 @@ func NewRabbitMQ(uri string) (*RabbitMQ, error) {
 	return rmq, nil
 }
 
+func (r *RabbitMQ) Close() {
+	if r.conn != nil {
+		r.conn.Close()
+	}
+
+	if r.Channel != nil {
+		r.Channel.Close()
+	}
+}
+
+func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, message contracts.AmqpMessage) error {
+	log.Printf("Publishing message with routing key: %s", routingKey)
+
+	jsonMsg, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %v", err)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	msg := amqp091.Publishing{
+		DeliveryMode: amqp091.Persistent,
+		ContentType:  "application/json",
+		Body:         jsonMsg,
+	}
+
+	return tracing.TracedPublisher(ctx, TripExchange, routingKey, msg, r.publish)
+}
+
+type MessageHandler func(context.Context, amqp091.Delivery) error
+
+func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) error {
+	// QoS (Quality of Service): Set prefetch count to 1 for fair dispatch
+	// This tells RabbitMQ not to give more than one msg to a service at a time
+	// The worker will only get the next message after it has acknowledged the previous one.
+	err := r.Channel.Qos(
+		1,     // prefetchCount: Limit to 1 unacknowledged msg per consumer
+		0,     // prefetchSize: No specific limit on msg size
+		false, // global: Apply prefetchCount to each consumer individually
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set QoS: %v", err)
+	}
+
+	msgs, err := r.Channel.Consume(
+		queueName, // queue
+		"",        // consumer
+		false,     // auto-ack
+		false,     // exclusive
+		false,     // no-local
+		false,     // no-wait
+		nil,       // args
+	)
+	if err != nil {
+		return fmt.Errorf("failed to consume a message: %v", err)
+	}
+
+	go func() {
+		for msg := range msgs {
+			if err := tracing.TracedConsumer(msg, func(ctx context.Context, delivery amqp091.Delivery) error {
+				log.Printf("Received a message: %s", msg.Body)
+
+				cfg := retry.DefaultConfig()
+				err := retry.WithBackoff(ctx, cfg, func() error {
+					return handler(ctx, delivery)
+				})
+				if err != nil {
+					log.Printf("Message processing failed after %d retries for message ID: %s, err: %v", cfg.MaxRetries, delivery.MessageId, err)
+
+					// Add failure context before sending to the DLQ
+					header := amqp091.Table{}
+					if delivery.Headers != nil {
+						header = delivery.Headers
+					}
+
+					header["x-death-reason"] = err.Error()
+					header["x-original-exchange"] = delivery.Exchange
+					header["x-original-routing-key"] = delivery.RoutingKey
+					header["x-retry-count"] = cfg.MaxRetries
+					delivery.Headers = header
+
+					// Reject without requeue - message will go to the DLQ
+					_ = delivery.Nack(false, false)
+					return err
+				}
+
+				// Ack only on success
+				if ackErr := msg.Ack(false); ackErr != nil {
+					log.Printf("ERROR: Failed to ack the message: %v. Message body: %s", ackErr, msg.Body)
+					return ackErr
+				}
+
+				return nil
+			}); err != nil {
+				log.Printf("Error processing the message: %v", err)
+			}
+
+		}
+	}()
+
+	return nil
+}
+
+func (r *RabbitMQ) publish(ctx context.Context, exchange, routingKey string, msg amqp091.Publishing) error {
+	return r.Channel.PublishWithContext(ctx,
+		TripExchange, // exchange
+		routingKey,   // routing key
+		false,        // mandatory
+		false,        // immediate
+		msg,          // amqp091.Publishing
+	)
+}
+
+func (r *RabbitMQ) setupDeadLetterExchange() error {
+	// Declare the dead letter exchange
+	err := r.Channel.ExchangeDeclare(
+		DeadLetterExchange,
+		"topic",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to declare dead letter exchange: %v", err)
+	}
+
+	// Declare the dead letter queue
+	q, err := r.Channel.QueueDeclare(
+		DeadLetterQueue, // name
+		true,            // durability
+		false,           // delete when unused
+		false,           // exclusive
+		false,           // no-wait
+		nil,             // arguments with DLX config
+	)
+	if err != nil {
+		return fmt.Errorf("failed to declare dead letter queue: %v", err)
+	}
+
+	// Bind the queue to the dead letter exchange with a wildcard routing key
+	err = r.Channel.QueueBind(
+		q.Name,             // queue name
+		"#",                // wildcard routing key to catch all messages
+		DeadLetterExchange, // exchange
+		false,              // no-wait
+		nil,                // arguments
+	)
+	if err != nil {
+		return fmt.Errorf("failed to bind dead letter queue to dead letter exchange: %v", err)
+	}
+
+	return nil
+}
+
 func (r *RabbitMQ) setupExchangesAndQueues() error {
+	// First setup the DLQ exchange and queue
+	if err := r.setupDeadLetterExchange(); err != nil {
+		return err
+	}
+
 	err := r.Channel.ExchangeDeclare(
 		TripExchange, // name
 		"topic",      // type
@@ -144,15 +308,18 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 }
 
 func (r *RabbitMQ) declareAndBindQueue(queueName string, messageTypes []string, exchange string) error {
+	// Add dead letter queue used for all the queue
+	args := amqp091.Table{
+		"x-dead-letter-exchange": DeadLetterExchange,
+	}
+
 	q, err := r.Channel.QueueDeclare(
 		queueName, // name
 		true,      // durability
 		false,     // delete when unused
 		false,     // exclusive
 		false,     // no-wait
-		amqp091.Table{
-			amqp091.QueueTypeArg: amqp091.QueueTypeQuorum,
-		},
+		args,      // arguments with DLX config
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -169,105 +336,6 @@ func (r *RabbitMQ) declareAndBindQueue(queueName string, messageTypes []string, 
 			return fmt.Errorf("failed to bind queue to %s: %v", queueName, err)
 		}
 	}
-
-	return nil
-}
-
-func (r *RabbitMQ) Close() {
-	if r.conn != nil {
-		r.conn.Close()
-	}
-
-	if r.Channel != nil {
-		r.Channel.Close()
-	}
-}
-
-func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, message contracts.AmqpMessage) error {
-	log.Printf("Publishing message with routing key: %s", routingKey)
-
-	jsonMsg, err := json.Marshal(message)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %v", err)
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	msg := amqp091.Publishing{
-		DeliveryMode: amqp091.Persistent,
-		ContentType:  "application/json",
-		Body:         jsonMsg,
-	}
-
-	return tracing.TracedPublisher(ctx, TripExchange, routingKey, msg, r.publish)
-}
-
-func (r *RabbitMQ) publish(ctx context.Context, exchange, routingKey string, msg amqp091.Publishing) error {
-	return r.Channel.PublishWithContext(ctx,
-		TripExchange, // exchange
-		routingKey,   // routing key
-		false,        // mandatory
-		false,        // immediate
-		msg,          // amqp091.Publishing
-	)
-}
-
-type MessageHandler func(context.Context, amqp091.Delivery) error
-
-func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) error {
-	// QoS (Quality of Service): Set prefetch count to 1 for fair dispatch
-	// This tells RabbitMQ not to give more than one msg to a service at a time
-	// The worker will only get the next message after it has acknowledged the previous one.
-	err := r.Channel.Qos(
-		1,     // prefetchCount: Limit to 1 unacknowledged msg per consumer
-		0,     // prefetchSize: No specific limit on msg size
-		false, // global: Apply prefetchCount to each consumer individually
-	)
-	if err != nil {
-		return fmt.Errorf("failed to set QoS: %v", err)
-	}
-
-	msgs, err := r.Channel.Consume(
-		queueName, // queue
-		"",        // consumer
-		false,     // auto-ack
-		false,     // exclusive
-		false,     // no-local
-		false,     // no-wait
-		nil,       // args
-	)
-	if err != nil {
-		return fmt.Errorf("failed to consume a message: %v", err)
-	}
-
-	go func() {
-		for msg := range msgs {
-
-			if err := tracing.TracedConsumer(msg, func(ctx context.Context, d amqp091.Delivery) error {
-				log.Printf("Received a message: %s", msg.Body)
-
-				if err := handler(ctx, msg); err != nil {
-					log.Printf("Failed to handle the message: %v", err)
-					// Nack without requeue — discard poison message to avoid crash loop
-					msg.Nack(false, false)
-
-					return err
-				}
-
-				// Ack only on success
-				if ackErr := msg.Ack(false); ackErr != nil {
-					log.Printf("Failed to ack the message: %v. Message body: %s", ackErr, msg.Body)
-					return ackErr
-				}
-
-				return nil
-			}); err != nil {
-				log.Printf("Failed to handle the message: %v", err)
-			}
-
-		}
-	}()
 
 	return nil
 }

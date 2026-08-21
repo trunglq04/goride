@@ -49,7 +49,7 @@ func handleRidersWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 		consumer := messaging.NewQueueConsumer(rb, connManager, q)
 
 		if err := consumer.Start(); err != nil {
-			log.Printf("Failed to start rider consumer for queue: %s: err: %v", q, err)
+			log.Printf("ERROR: Failed to start rider consumer for queue: %s: err: %v", q, err)
 		}
 	}
 
@@ -141,7 +141,7 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 		consumer := messaging.NewQueueConsumer(rb, connManager, q)
 
 		if err := consumer.Start(); err != nil {
-			log.Printf("Failed to start driver consumer for queue: %s: err: %v", q, err)
+			log.Printf("ERROR: Failed to start driver consumer for queue: %s: err: %v", q, err)
 		}
 	}
 

@@ -39,7 +39,7 @@ func (qc *QueueConsumer) Start() error {
 		for msg := range msgs {
 			var msgBody contracts.AmqpMessage
 			if err := json.Unmarshal(msg.Body, &msgBody); err != nil {
-				log.Println("Failed to unmarshal message:", err)
+				log.Println("ERROR: Failed to unmarshal message:", err)
 				continue
 			}
 
@@ -48,7 +48,7 @@ func (qc *QueueConsumer) Start() error {
 			var payload any
 			if msgBody.Data != nil {
 				if err := json.Unmarshal(msgBody.Data, &payload); err != nil {
-					log.Println("Failed to unmarshal payload:", err)
+					log.Println("ERROR: Failed to unmarshal payload:", err)
 					continue
 				}
 			}
@@ -64,7 +64,7 @@ func (qc *QueueConsumer) Start() error {
 					// so it can be retried once the client reconnects.
 					log.Printf("connection not found for user %s, requeueing message", userID)
 				} else {
-					log.Printf("Failed to send message to user %s: %v — discarding", userID, err)
+					log.Printf("ERROR: Failed to send message to user %s: %v — discarding", userID, err)
 				}
 				continue
 			}

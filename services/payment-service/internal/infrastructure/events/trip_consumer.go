@@ -29,20 +29,20 @@ func (c *TripConsumer) Listen() error {
 		func(ctx context.Context, msg amqp091.Delivery) error {
 			var message contracts.AmqpMessage
 			if err := json.Unmarshal(msg.Body, &message); err != nil {
-				log.Printf("Failed to unmarshal message: %v", err)
+				log.Printf("ERROR: Failed to unmarshal message: %v", err)
 				return err
 			}
 
 			var payload messaging.PaymentTripResponseData
 			if err := json.Unmarshal(message.Data, &payload); err != nil {
-				log.Printf("Failed to unmarshal payload: %v", err)
+				log.Printf("ERROR: Failed to unmarshal PaymentTripResponseData: %v", err)
 				return err
 			}
 
 			switch msg.RoutingKey {
 			case contracts.PaymentCmdCreateSession:
 				if err := c.handleTripAccepted(ctx, payload); err != nil {
-					log.Printf("Failed to handle trip accepted: %v", err)
+					log.Printf("ERROR: Failed to handle trip accepted: %v", err)
 					return err
 				}
 			}
@@ -63,7 +63,7 @@ func (c *TripConsumer) handleTripAccepted(ctx context.Context, payload messaging
 		payload.Currency,
 	)
 	if err != nil {
-		log.Printf("Failed to create payment session: %v", err)
+		log.Printf("ERROR: Failed to create payment session: %v", err)
 		return err
 	}
 
@@ -79,7 +79,7 @@ func (c *TripConsumer) handleTripAccepted(ctx context.Context, payload messaging
 
 	payloadBytes, err := json.Marshal(paymentPayload)
 	if err != nil {
-		log.Printf("Failed to marshal payment session payload: %v", err)
+		log.Printf("ERROR: Failed to marshal payment session payload: %v", err)
 		return err
 	}
 
@@ -90,7 +90,7 @@ func (c *TripConsumer) handleTripAccepted(ctx context.Context, payload messaging
 			Data:    payloadBytes,
 		},
 	); err != nil {
-		log.Printf("Failed to publish payment session created event: %v", err)
+		log.Printf("ERROR: Failed to publish payment session created event: %v", err)
 		return err
 	}
 

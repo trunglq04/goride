@@ -32,14 +32,14 @@ func (c *driverConsumer) Listen() error {
 			var message contracts.AmqpMessage
 			err := json.Unmarshal(msg.Body, &message)
 			if err != nil {
-				log.Printf("Failed to unmarshal message: %v", err)
+				log.Printf("ERROR: Failed to unmarshal message: %v", err)
 				return err
 			}
 
 			var payload messaging.DriverTripResponseData
 			err = json.Unmarshal(message.Data, &payload)
 			if err != nil {
-				log.Printf("Failed to unmarshal driver trip response: %v", err)
+				log.Printf("ERROR: Failed to unmarshal driver trip response: %v", err)
 				return err
 			}
 
@@ -48,12 +48,12 @@ func (c *driverConsumer) Listen() error {
 			switch msg.RoutingKey {
 			case contracts.DriverCmdTripAccept:
 				if err := c.handleTripAccepted(ctx, payload.TripID, payload.Driver); err != nil {
-					log.Printf("Failed to handle the trip accept: %v", err)
+					log.Printf("ERROR: Failed to handle the trip accept: %v", err)
 					return err
 				}
 			case contracts.DriverCmdTripDecline:
 				if err := c.handleTripDeclined(ctx, payload.TripID, payload.RiderID, payload.Driver.Id); err != nil {
-					log.Printf("Failed to handle the trip decline: %v", err)
+					log.Printf("ERROR: Failed to handle the trip decline: %v", err)
 					return err
 				}
 			default:
@@ -108,7 +108,7 @@ func (c *driverConsumer) handleTripAccepted(ctx context.Context, tripID string, 
 
 	// 2. Update the trip
 	if err := c.service.UpdateTrip(ctx, tripID, "accepted", driver, nil); err != nil {
-		log.Printf("Failed to update the trip: %v", err)
+		log.Printf("ERROR: Failed to update the trip: %v", err)
 		return err
 	}
 

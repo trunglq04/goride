@@ -25,7 +25,7 @@ func InitTracer(cfg Config) (func(context.Context) error, error) {
 	defer cancel()
 
 	// 1. Initialize the otlptracehttp exporter
-	traceExporter, err := newExporter(ctx, cfg.JaegerEndpoint) // choose Jaeger for export reports
+	traceExporter, err := newExporter(ctx, cfg.JaegerEndpoint) // choose OTLP tho Jaeger for export reports
 	if err != nil {
 		return nil, err
 	}

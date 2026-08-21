@@ -27,7 +27,7 @@ func main() {
 
 	traceShutdown, err := tracing.InitTracer(tracerCfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize the tracer: %v", err)
+		log.Fatalf("ERROR: Failed to initialize the tracer: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer traceShutdown(ctx)
@@ -45,7 +45,7 @@ func main() {
 
 	lis, err := net.Listen("tcp", GrpcAddr)
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		log.Fatalf("ERROR: Failed to listen: %v", err)
 	}
 
 	svc := NewService()
@@ -66,7 +66,7 @@ func main() {
 	tripConsumer := NewTripConsumer(rabbitmq, svc)
 	go func() {
 		if err := tripConsumer.Listen(); err != nil {
-			log.Fatalf("Failed to listen to the message: %v", err)
+			log.Fatalf("ERROR: Failed to listen to the message: %v", err)
 		}
 	}()
 
@@ -74,7 +74,7 @@ func main() {
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
-			log.Printf("Failed to serve: %v", err)
+			log.Printf("ERROR: Failed to serve: %v", err)
 			cancel()
 		}
 	}()

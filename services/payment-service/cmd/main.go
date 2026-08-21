@@ -28,7 +28,7 @@ func main() {
 
 	traceShutdown, err := tracing.InitTracer(tracerCfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize the tracer: %v", err)
+		log.Fatalf("ERROR: Failed to initialize the tracer: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer traceShutdown(ctx)
