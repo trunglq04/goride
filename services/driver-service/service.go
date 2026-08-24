@@ -13,19 +13,18 @@ import (
 )
 
 type Service struct {
-	drivers []*driverInMap
+	drivers map[string]*driverInMap
 	mu      sync.RWMutex
 }
 
 type driverInMap struct {
 	Driver *pb.Driver
-	// Index int
 	// TODO: route
 }
 
 func NewService() *Service {
 	return &Service{
-		drivers: make([]*driverInMap, 0),
+		drivers: make(map[string]*driverInMap),
 	}
 }
 
@@ -73,9 +72,9 @@ func (s *Service) RegisterDriver(driverId string, packageSlug string) (*pb.Drive
 	}
 
 	s.mu.Lock()
-	s.drivers = append(s.drivers, &driverInMap{
+	s.drivers[driverId] = &driverInMap{
 		Driver: driver,
-	})
+	}
 	s.mu.Unlock()
 
 	log.Printf("Succesfully REGISTER a DRIVER: %v, packageSlug: %v\n", driver.Id, driver.PackageSlug)
@@ -87,10 +86,31 @@ func (s *Service) UnregisterDriver(driverId string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for i, driver := range s.drivers {
-		if driver.Driver.Id == driverId {
-			s.drivers = append(s.drivers[:i], s.drivers[i+1:]...)
-			log.Println("Succesfully UNREGISTER a DRIVER:", driverId)
-		}
+	delete(s.drivers, driverId)
+	if _, ok := s.drivers[driverId]; !ok {
+		log.Println("Succesfully UNREGISTER a DRIVER:", driverId)
 	}
+}
+
+func (s *Service) UpdateDriverLocation(driverId string, location *pb.Location, geohash string) (*pb.Driver, error) {
+	driver := &pb.Driver{
+		Id:             driverId,
+		Geohash:        geohash,
+		Location:       location,
+		Name:           s.drivers[driverId].Driver.Name,
+		PackageSlug:    s.drivers[driverId].Driver.PackageSlug,
+		ProfilePicture: s.drivers[driverId].Driver.ProfilePicture,
+		CarPlate:       s.drivers[driverId].Driver.CarPlate,
+	}
+
+	s.mu.Lock()
+	s.drivers[driverId] = &driverInMap{
+		Driver: driver,
+	}
+
+	s.mu.Unlock()
+
+	log.Printf("Succesfully UPDATE a DRIVER: %v, packageSlug: %v, location: %+v\n", driver.Id, driver.PackageSlug, location)
+
+	return driver, nil
 }

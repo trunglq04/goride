@@ -24,6 +24,34 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "200m"
+            # Health Probe (check if pod ready)
+          readinessProbe:
+            tcpSocket:
+              port: 9093
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9093
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MONGODB_URI
+            - name: RABBITMQ_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: RABBITMQ_URI
+            - name: JAEGER_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: JAEGER_ENDPOINT
 
 ---
 apiVersion: v1

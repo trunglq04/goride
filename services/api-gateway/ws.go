@@ -101,7 +101,7 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 	defer func() {
 		connManager.Remove(userID)
 
-		res, err := driverService.Client.UnregisterDriver(c, &driver.RegisterDriverRequest{
+		res, err := driverService.Client.UnregisterDriver(c, &driver.UnregisterDriverRequest{
 			DriverID:    userID,
 			PackageSlug: packageSlug,
 		})
@@ -167,7 +167,14 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 		switch driverMsg.Type {
 		case contracts.DriverCmdLocation:
 			// TODO: Handle driver's location update in the future
-			continue
+			if err := rb.PublishMessage(c,
+				driverMsg.Type,
+				contracts.AmqpMessage{
+					OwnerID: userID,
+					Data:    driverMsg.Data,
+				}); err != nil {
+				log.Printf("Error publishing message to RabbitMQ: %v", err)
+			}
 		case contracts.DriverCmdTripAccept, contracts.DriverCmdTripDecline:
 			if err := rb.PublishMessage(c,
 				driverMsg.Type,

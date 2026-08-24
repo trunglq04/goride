@@ -12,6 +12,7 @@ import (
 	"github.com/trunglq04/goride/services/trip-service/internal/infrastructure/grpc"
 	"github.com/trunglq04/goride/services/trip-service/internal/infrastructure/repository"
 	"github.com/trunglq04/goride/services/trip-service/internal/service"
+	"github.com/trunglq04/goride/shared/db"
 	"github.com/trunglq04/goride/shared/env"
 	"github.com/trunglq04/goride/shared/messaging"
 	"github.com/trunglq04/goride/shared/tracing"
@@ -34,10 +35,26 @@ func main() {
 		log.Fatalf("ERROR: Failed to initialize the tracer: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	defer traceShutdown(ctx)
 	defer cancel()
+	defer traceShutdown(ctx)
+
+	// Init MongoDB
+	mongoClient, err := db.NewMongoClient(ctx, db.NewMongoDefaultConfig())
+	if err != nil {
+		log.Fatalf("Failed to initialize MongoDB, err: %v", err)
+	}
+	defer mongoClient.Disconnect(ctx)
+
+	mongodb := db.GetDatabase(mongoClient, db.NewMongoDefaultConfig())
 
 	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
+
+	mongoDBRepo := repository.NewMongoRepository(mongodb)
+	if err := mongoDBRepo.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("ERROR: Failed to ensure indexes: %v", err)
+	}
+
+	svc := service.NewService(mongoDBRepo)
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)
@@ -57,12 +74,9 @@ func main() {
 		log.Fatal(err)
 	}
 	defer rabbitmq.Close()
-
 	log.Println("Starting RabbitMQ connection")
 
-	inmemRepo := repository.NewInmemReposity()
-	svc := service.NewService(inmemRepo)
-
+	// Start trip publisher
 	publisher := events.NewTripEventPublisher(rabbitmq)
 
 	// Start driver consumer

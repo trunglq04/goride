@@ -12,6 +12,7 @@ const (
 	DriverTripResponseQueue         = "driver_trip_response"    // send res to rider if driver accepted or not
 	NotifyDriverNoDriversFoundQueue = "notify_driver_no_drivers_found"
 	NotifyDriverAssignQueue         = "notify_driver_assign"
+	NotifyDriverLocationQueue       = "notify_driver_location"
 	// Payment related queues
 	PaymentTripResponseQueue         = "payment_trip_response"
 	NotifyPaymentSessionCreatedQueue = "notify_payment_session_created"

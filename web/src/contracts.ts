@@ -34,7 +34,16 @@ export type ServerWsMessage =
   | NoDriversFoundRequest;
 
 // Messages sent from the client to the server via the websocket
-export type ClientWsMessage = DriverResponseToTripResponse
+export type ClientWsMessage = DriverResponseToTripResponse | DriverLocationClientMessage;
+
+export interface DriverLocationClientMessage {
+  type: TripEvents.DriverLocation;
+  data: {
+    driverID: string;
+    location: Coordinate;
+    geohash: string;
+  };
+}
 
 interface TripCreatedRequest {
   type: TripEvents.Created;

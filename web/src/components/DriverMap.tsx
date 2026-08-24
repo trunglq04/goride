@@ -63,9 +63,21 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
   })
 
   const handleMapClick = (e: L.LeafletMouseEvent) => {
-    setRiderLocation({
+    const newLocation = {
       latitude: e.latlng.lat,
       longitude: e.latlng.lng
+    }
+    setRiderLocation(newLocation)
+
+    const newGeohash = Geohash.encode(newLocation.latitude, newLocation.longitude, 7)
+
+    sendMessage({
+      type: TripEvents.DriverLocation,
+      data: {
+        driverID: userID,
+        location: newLocation,
+        geohash: newGeohash
+      }
     })
   }
 

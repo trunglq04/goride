@@ -18,21 +18,31 @@ spec:
           ports:
             - containerPort: 9092
           env:
-            # - name: STRIPE_SECRET_KEY
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: stripe-secrets
-            #       key: stripe-secret-key
-            # - name: STRIPE_WEBHOOK_SECRET
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: stripe-webhook-secrets
-            #       key: stripe-webhook-secret-key
+            - name: STRIPE_SUCCESS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: STRIPE_SUCCESS_URL
+            - name: STRIPE_CANCEL_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: STRIPE_CANCEL_URL
+
+            # Stripe credentials
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: STRIPE_SECRET_KEY
+
+            # RabbitMQ credentials
             - name: RABBITMQ_URI
               valueFrom:
                 secretKeyRef:
-                  name: rabbitmq-credentials
-                  key: uri
+                  name: app-secrets
+                  key: RABBITMQ_URI
+
           resources:
             requests:
               memory: "64Mi"

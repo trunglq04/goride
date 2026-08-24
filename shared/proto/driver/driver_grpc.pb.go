@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DriverService_RegisterDriver_FullMethodName   = "/driver.DriverService/RegisterDriver"
-	DriverService_UnregisterDriver_FullMethodName = "/driver.DriverService/UnregisterDriver"
+	DriverService_RegisterDriver_FullMethodName       = "/driver.DriverService/RegisterDriver"
+	DriverService_UnregisterDriver_FullMethodName     = "/driver.DriverService/UnregisterDriver"
+	DriverService_UpdateDriverLocation_FullMethodName = "/driver.DriverService/UpdateDriverLocation"
 )
 
 // DriverServiceClient is the client API for DriverService service.
@@ -28,7 +29,8 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DriverServiceClient interface {
 	RegisterDriver(ctx context.Context, in *RegisterDriverRequest, opts ...grpc.CallOption) (*RegisterDriverResponse, error)
-	UnregisterDriver(ctx context.Context, in *RegisterDriverRequest, opts ...grpc.CallOption) (*RegisterDriverResponse, error)
+	UnregisterDriver(ctx context.Context, in *UnregisterDriverRequest, opts ...grpc.CallOption) (*UnregisterDriverResponse, error)
+	UpdateDriverLocation(ctx context.Context, in *UpdateDriverLocationRequest, opts ...grpc.CallOption) (*UpdateDriverLocationResponse, error)
 }
 
 type driverServiceClient struct {
@@ -49,10 +51,20 @@ func (c *driverServiceClient) RegisterDriver(ctx context.Context, in *RegisterDr
 	return out, nil
 }
 
-func (c *driverServiceClient) UnregisterDriver(ctx context.Context, in *RegisterDriverRequest, opts ...grpc.CallOption) (*RegisterDriverResponse, error) {
+func (c *driverServiceClient) UnregisterDriver(ctx context.Context, in *UnregisterDriverRequest, opts ...grpc.CallOption) (*UnregisterDriverResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RegisterDriverResponse)
+	out := new(UnregisterDriverResponse)
 	err := c.cc.Invoke(ctx, DriverService_UnregisterDriver_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *driverServiceClient) UpdateDriverLocation(ctx context.Context, in *UpdateDriverLocationRequest, opts ...grpc.CallOption) (*UpdateDriverLocationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateDriverLocationResponse)
+	err := c.cc.Invoke(ctx, DriverService_UpdateDriverLocation_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +76,8 @@ func (c *driverServiceClient) UnregisterDriver(ctx context.Context, in *Register
 // for forward compatibility.
 type DriverServiceServer interface {
 	RegisterDriver(context.Context, *RegisterDriverRequest) (*RegisterDriverResponse, error)
-	UnregisterDriver(context.Context, *RegisterDriverRequest) (*RegisterDriverResponse, error)
+	UnregisterDriver(context.Context, *UnregisterDriverRequest) (*UnregisterDriverResponse, error)
+	UpdateDriverLocation(context.Context, *UpdateDriverLocationRequest) (*UpdateDriverLocationResponse, error)
 	mustEmbedUnimplementedDriverServiceServer()
 }
 
@@ -78,8 +91,11 @@ type UnimplementedDriverServiceServer struct{}
 func (UnimplementedDriverServiceServer) RegisterDriver(context.Context, *RegisterDriverRequest) (*RegisterDriverResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterDriver not implemented")
 }
-func (UnimplementedDriverServiceServer) UnregisterDriver(context.Context, *RegisterDriverRequest) (*RegisterDriverResponse, error) {
+func (UnimplementedDriverServiceServer) UnregisterDriver(context.Context, *UnregisterDriverRequest) (*UnregisterDriverResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UnregisterDriver not implemented")
+}
+func (UnimplementedDriverServiceServer) UpdateDriverLocation(context.Context, *UpdateDriverLocationRequest) (*UpdateDriverLocationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateDriverLocation not implemented")
 }
 func (UnimplementedDriverServiceServer) mustEmbedUnimplementedDriverServiceServer() {}
 func (UnimplementedDriverServiceServer) testEmbeddedByValue()                       {}
@@ -121,7 +137,7 @@ func _DriverService_RegisterDriver_Handler(srv interface{}, ctx context.Context,
 }
 
 func _DriverService_UnregisterDriver_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterDriverRequest)
+	in := new(UnregisterDriverRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -133,7 +149,25 @@ func _DriverService_UnregisterDriver_Handler(srv interface{}, ctx context.Contex
 		FullMethod: DriverService_UnregisterDriver_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DriverServiceServer).UnregisterDriver(ctx, req.(*RegisterDriverRequest))
+		return srv.(DriverServiceServer).UnregisterDriver(ctx, req.(*UnregisterDriverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DriverService_UpdateDriverLocation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateDriverLocationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DriverServiceServer).UpdateDriverLocation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DriverService_UpdateDriverLocation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DriverServiceServer).UpdateDriverLocation(ctx, req.(*UpdateDriverLocationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -152,6 +186,10 @@ var DriverService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UnregisterDriver",
 			Handler:    _DriverService_UnregisterDriver_Handler,
+		},
+		{
+			MethodName: "UpdateDriverLocation",
+			Handler:    _DriverService_UpdateDriverLocation_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

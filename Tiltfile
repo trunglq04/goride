@@ -12,6 +12,7 @@ k8s_yaml('./infra/development/k8s/app-config.yaml')
 k8s_yaml('./infra/development/k8s/rabbitmq-deployment.yaml')
 k8s_resource('rabbitmq', port_forwards=['5672', '15672'], labels='tooling')
 ### End of RabbitMQ Config ###
+
 ### API Gateway ###
 
 gateway_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/api-gateway ./services/api-gateway'
@@ -43,6 +44,7 @@ k8s_yaml('./infra/development/k8s/api-gateway-deployment.yaml')
 k8s_resource('api-gateway', port_forwards=8081,
              resource_deps=['api-gateway-compile', 'trip-service', 'driver-service', 'payment-service'], labels="services") # Add trip service and driver service to resource_deps to ensure them start before starting the API Gateway
 ### End of API Gateway ###
+
 ### Trip Service ###
 
 trip_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/trip-service ./services/trip-service/cmd/main.go'
@@ -73,6 +75,7 @@ k8s_yaml('./infra/development/k8s/trip-service-deployment.yaml')
 k8s_resource('trip-service', resource_deps=['trip-service-compile', 'rabbitmq'], labels="services")
 
 ### End of Trip Service ###
+
 ### Driver Service ###
 
 driver_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/driver-service ./services/driver-service/*.go'
@@ -103,6 +106,7 @@ k8s_yaml('./infra/development/k8s/driver-service-deployment.yaml')
 k8s_resource('driver-service', resource_deps=['driver-service-compile', 'rabbitmq'], labels="services")
 
 ### End of Driver Service ###
+
 ### Payment Service ###
 
 payment_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/payment-service ./services/payment-service/cmd/main.go'
@@ -133,6 +137,7 @@ k8s_yaml('./infra/development/k8s/payment-service-deployment.yaml')
 k8s_resource('payment-service', resource_deps=['payment-service-compile', 'rabbitmq'], labels="services")
 
 ### End of Payment Service ###
+
 ### Web Frontend ###
 
 docker_build(
@@ -144,7 +149,8 @@ docker_build(
 k8s_yaml('./infra/development/k8s/web-deployment.yaml')
 k8s_resource('web', port_forwards=3000, labels="frontend")
 
-### End of Web Frontend ###s
+### End of Web Frontend ###
+
 ### Jaeger ###
 
 k8s_yaml('./infra/development/k8s/jaeger.yaml')

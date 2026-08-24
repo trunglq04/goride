@@ -37,6 +37,11 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 10
           env:
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MONGODB_URI
             - name: RABBITMQ_URI
               valueFrom:
                 secretKeyRef:

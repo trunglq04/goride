@@ -9,6 +9,7 @@ import (
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/trunglq04/goride/shared/contracts"
 	"github.com/trunglq04/goride/shared/messaging"
+	pb "github.com/trunglq04/goride/shared/proto/driver"
 )
 
 type TripConsumer struct {
@@ -24,34 +25,75 @@ func NewTripConsumer(rabbitmq *messaging.RabbitMQ, service *Service) *TripConsum
 }
 
 func (c *TripConsumer) Listen() error {
-	return c.rabbitmq.ConsumeMessages(
-		messaging.FindAvailableDriversQueue, // handle trip created
-		func(ctx context.Context, msg amqp091.Delivery) error {
-			var tripEvent contracts.AmqpMessage
-			if err := json.Unmarshal(msg.Body, &tripEvent); err != nil {
-				log.Printf("ERROR: Failed to unmarshal message: %v", err)
-				return err
-			}
+	consumers := []struct {
+		queue   string
+		handler func(context.Context, amqp091.Delivery) error
+	}{
+		{
+			queue:   messaging.FindAvailableDriversQueue,
+			handler: c.handleTripEvents,
+		},
+		{
+			queue:   messaging.NotifyDriverLocationQueue,
+			handler: c.handleDriverLocationUpdate,
+		},
+	}
 
-			var payload messaging.TripEventData
-			if err := json.Unmarshal(tripEvent.Data, &payload); err != nil {
-				log.Printf("ERROR: Failed to unmarshal payload: %v", err)
-				return err
-			}
+	for _, consumer := range consumers {
+		if err := c.rabbitmq.ConsumeMessages(consumer.queue, consumer.handler); err != nil {
+			return err
+		}
+	}
 
-			log.Printf("Driver received message: %+v", payload)
+	return nil
+}
 
-			switch msg.RoutingKey {
-			case contracts.TripEventCreated, contracts.TripEventDriverNotInterested:
-				if err := c.handleFindAndNotifyDrivers(ctx, payload); err != nil {
-					return err
-				}
-			default:
-				log.Printf("unknown trip event routing key: %s", msg.RoutingKey)
-			}
+func (c *TripConsumer) handleTripEvents(ctx context.Context, msg amqp091.Delivery) error {
+	var tripEvent contracts.AmqpMessage
+	if err := json.Unmarshal(msg.Body, &tripEvent); err != nil {
+		log.Printf("ERROR: Failed to unmarshal message: %v", err)
+		return err
+	}
 
-			return nil
-		})
+	var payload messaging.TripEventData
+	if err := json.Unmarshal(tripEvent.Data, &payload); err != nil {
+		log.Printf("ERROR: Failed to unmarshal payload: %v", err)
+		return err
+	}
+
+	log.Printf("Driver received message: %+v", payload)
+
+	switch msg.RoutingKey {
+	case contracts.TripEventCreated, contracts.TripEventDriverNotInterested:
+		if err := c.handleFindAndNotifyDrivers(ctx, payload); err != nil {
+			return err
+		}
+	default:
+		log.Printf("unknown trip event routing key: %s", msg.RoutingKey)
+	}
+
+	return nil
+}
+
+func (c *TripConsumer) handleDriverLocationUpdate(ctx context.Context, msg amqp091.Delivery) error {
+	var locationEvent contracts.AmqpMessage
+	if err := json.Unmarshal(msg.Body, &locationEvent); err != nil {
+		log.Printf("ERROR: Failed to unmarshal message: %v", err)
+		return err
+	}
+
+	var req pb.UpdateDriverLocationRequest
+	if err := json.Unmarshal(locationEvent.Data, &req); err != nil {
+		log.Printf("ERROR: Failed to unmarshal payload: %v", err)
+		return err
+	}
+
+	if _, err := c.service.UpdateDriverLocation(locationEvent.OwnerID, req.GetLocation(), req.GetGeohash()); err != nil {
+		log.Printf("ERROR: Failed to update driver location: %v", err)
+		return err
+	}
+
+	return nil
 }
 
 func (c *TripConsumer) handleFindAndNotifyDrivers(ctx context.Context, payload messaging.TripEventData) error {

@@ -12,12 +12,12 @@ import (
 )
 
 type TripModel struct {
-	ID                primitive.ObjectID
-	UserID            string
-	Status            string
-	RideFare          *RideFareModel
-	Driver            *pb.TripDriver
-	ExcludedDriverIDs []string
+	ID                primitive.ObjectID `bson:"_id,omitempty"`
+	UserID            string             `bson:"userID"`
+	Status            string             `bson:"status"`
+	RideFare          *RideFareModel     `bson:"rideFare"`
+	Driver            *pb.TripDriver     `bson:"driver"`
+	ExcludedDriverIDs []string           `bson:"excludedDriverIDs"`
 }
 
 func (t *TripModel) ToProto() *pb.Trip {
@@ -36,7 +36,7 @@ type TripRepository interface {
 	SaveRideFare(ctx context.Context, fare *RideFareModel) error
 	GetRideFareByID(ctx context.Context, id string) (*RideFareModel, error)
 	GetTripByID(ctx context.Context, id string) (*TripModel, error)
-	UpdateTrip(ctx context.Context, tripID string, status string, driver *pbd.Driver, excludedDriverID *string) error
+	UpdateTrip(ctx context.Context, tripID, status string, driver *pbd.Driver, excludedDriverID *string) error
 }
 
 type TripService interface {

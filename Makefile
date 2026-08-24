@@ -9,3 +9,7 @@ generate-proto:
 		--go_out=$(GO_OUT) \
 		--go-grpc_out=$(GO_OUT) \
 		$(PROTO_SRC)
+
+.PHONY: stripe-listen
+stripe-listen:
+	stripe listen --forward-to localhost:8081/webhook/stripe

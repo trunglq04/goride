@@ -1,17 +1,20 @@
 package domain
 
 import (
+	"time"
+
 	tripTypes "github.com/trunglq04/goride/services/trip-service/pkg/types"
 	pb "github.com/trunglq04/goride/shared/proto/trip"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type RideFareModel struct {
-	ID                primitive.ObjectID
-	UserID            string
-	PackageSlug       string // ex: sedan, suv, van, luxury
-	TotalPriceInCents float64
-	Route             *tripTypes.OsrmApiResponse
+	ID                primitive.ObjectID         `bson:"_id,omitempty"`
+	UserID            string                     `bson:"userID"`
+	PackageSlug       string                     `bson:"packageSlug"` // ex: sedan, suv, van, luxury
+	TotalPriceInCents float64                    `bson:"totalPriceInCents"`
+	Route             *tripTypes.OsrmApiResponse `bson:"route"`
+	CreatedAt         time.Time                  `bson:"createdAt"`
 }
 
 func (r *RideFareModel) ToProto() *pb.RideFare {
