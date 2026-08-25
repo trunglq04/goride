@@ -44,8 +44,10 @@ func main() {
 	log.Println("Init tracing successfully!")
 
 	gin.SetMode(gin.ReleaseMode)
-	router := gin.Default()
+	router := gin.New()
+	router.Use(gin.Recovery())
 	router.Use(otelgin.Middleware(tracerCfg.ServiceName))
+	corsConfig(router)
 
 	// RabbitMQ connection
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
@@ -55,8 +57,9 @@ func main() {
 	defer rabbitmq.Close()
 
 	trip := router.Group("/trip")
-	trip.POST("/preview", enableCORS(handleTripPreview))
-	trip.POST("/start", enableCORS(handleTripStart))
+	trip.Use()
+	trip.POST("/preview", handleTripPreview)
+	trip.POST("/start", handleTripStart)
 
 	// WebSocket
 	ws := router.Group("/ws")

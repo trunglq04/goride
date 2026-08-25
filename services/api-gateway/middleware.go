@@ -2,23 +2,37 @@ package main
 
 import (
 	"net/http"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
+func corsConfig(server *gin.Engine) {
+	server.Use(cors.New(cors.Config{
+		AllowAllOrigins: true,
 
-func enableCORS(handler gin.HandlerFunc) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"},
 
-		// allow preflight requests from the browser API
-		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(http.StatusNoContent)
+		AllowHeaders: []string{
+			"Origin",
+			"Content-Type",
+			"Accept",
+			"Authorization",
+			"Cache-Control",
+			"X-Requested-With",
+		},
+
+		AllowCredentials: false,
+
+		MaxAge: 12 * time.Hour,
+	}))
+
+	server.Use(func(ctx *gin.Context) {
+		if ctx.Request.Method == http.MethodOptions {
+			ctx.AbortWithStatus(http.StatusNoContent)
 			return
 		}
-
-		handler(c)
-	}
+		ctx.Next()
+	})
 }
