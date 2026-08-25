@@ -17,6 +17,13 @@ spec:
           image: goridecr.azurecr.io/goride/payment-service
           ports:
             - containerPort: 9092
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
           env:
             - name: STRIPE_SUCCESS_URL
               valueFrom:
@@ -43,25 +50,12 @@ spec:
                   name: app-secrets
                   key: RABBITMQ_URI
 
-          resources:
-            requests:
-              memory: "64Mi"
-              cpu: "100m"
-            limits:
-              memory: "128Mi"
-              cpu: "200m"
-          # Health Probe (check if pod ready)
-          readinessProbe:
-            tcpSocket:
-              port: 9092
-            initialDelaySeconds: 5
-            periodSeconds: 5
-            failureThreshold: 5
-          livenessProbe:
-            tcpSocket:
-              port: 9092
-            initialDelaySeconds: 15
-            periodSeconds: 10
+            # Jaeger credentials
+            - name: JAEGER_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: JAEGER_ENDPOINT
 ---
 apiVersion: v1
 kind: Service

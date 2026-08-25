@@ -73,161 +73,365 @@ or
 minikube dashboard
 ```
 
-## Deployment (Google Cloud example)
+## Deployment (Azure example)
 
 It's advisable to first run the steps manually and then build a proper CI/CD flow according to your infrastructure.
 
-## 0. Environments
+### 0. Environments
+
+Export these in your `~/.bashrc` (or `.zshrc`) so every command below works as-is:
 
 ```bash
-REGION: europe-west1 # change according to your location
-PROJECT_ID: <your-gcp-project-id>
+export REGION=malaysiawest              # pick the Azure region closest to you
+export RESOURCE_GROUP=goride-rg         # logical container for all your Azure resources
+export ACR_NAME=goridecr                # container registry name (globally unique, alphanumeric only)
+export AKS_CLUSTER=goride-aks
+export ACR_SERVER=$ACR_NAME.azurecr.io  # full registry hostname used in image tags
 ```
 
-## 1. Add secrets.yaml file to the production folder
+### 1. Add secrets.yaml file to the production folder
 
-Production folder needs to contain a secrets.yaml for the production environment, you can just copy secrets from the development folder for now.
+The production folder (`infra/production/azure/k8s/`) needs a `secrets.yaml` containing real values for:
 
-## 2. Build Docker Images
+- `STRIPE_SECRET_KEY` (test mode: `sk_test_...`)
+- `STRIPE_WEBHOOK_KEY` (you get this in step 7 after registering the webhook)
+- `MONGODB_URI`, `JWT_SECRET`, RabbitMQ credentials
 
-Build all docker images and tag them accordingly to push to Artifact Registry.
+You can copy the development secrets as a starting point, then fill in real values. Never commit them — `secrets.yaml` is already gitignored.
+
+### 2. Create the Container Registry
+
+Azure Container Registry (ACR) replaces Google Artifact Registry:
 
 ```bash
-# Build the Api gateway
-docker build -t {REGION}-docker.pkg.dev/{PROJECT_ID}/goride/api-gateway:latest --platform linux/amd64 -f infra/production/docker/api-gateway.Dockerfile .
+az group create --name $RESOURCE_GROUP --location $REGION
 
-# Build the Driver service
-docker build -t {REGION}-docker.pkg.dev/{PROJECT_ID}/goride/driver-service:latest --platform linux/amd64 -f infra/production/docker/driver-service.Dockerfile .
+az acr create --resource-group $RESOURCE_GROUP --name $ACR_NAME --sku Basic
 
-# Build the Trip service
-docker build -t {REGION}-docker.pkg.dev/{PROJECT_ID}/goride/trip-service:latest --platform linux/amd64 -f infra/production/docker/trip-service.Dockerfile .
-
-# Build the Payment service
-docker build -t {REGION}-docker.pkg.dev/{PROJECT_ID}/goride/payment-service:latest --platform linux/amd64 -f infra/production/docker/payment-service.Dockerfile .
+az acr login --name $ACR_NAME
 ```
 
-## 3. Create a Artifact Registry repository
+`az acr login` configures your local Docker daemon to push/pull to `$ACR_SERVER`.
 
-Go to Google Cloud > Artifact Registry and manually create a docker repository to host your project images.
+### 3. Build & push Docker images
 
-## 4. Push the Docker images to artifact registry
-
-Docker push the images.
-If you get errors pushing:
-
-1. Make sure to `gcloud login`, select the right project or even `gcloud init`.
-2. Configure artifact on your docker config `gcloud auth configure-docker {REGION}-docker.pkg.dev` [Docs](https://cloud.google.com/artifact-registry/docs/docker/pushing-and-pulling#cred-helper)
-
-## 5. Create a Google Kubernetes Cluster
-
-You can either run a `gcloud` command to start a GKE cluster or manually create a cluster on the UI (recommended).
-
-## 6. Update manifests files
-
-Connect to your remote cluster and apply the kubernetes manifests.
+Five images total — four Go services plus the Next.js frontend. All builds target `linux/amd64` because AKS nodes are x86-64 (without this flag you get `exec format error` pods on ARM laptops):
 
 ```bash
-gcloud container clusters get-credentials goride
- --region {REGION}--project {PROJECT_ID}
+# API Gateway
+docker build -t $ACR_SERVER/goride/api-gateway:latest --platform linux/amd64 \
+  -f infra/production/azure/docker/api-gateway.Dockerfile .
+
+# Trip Service
+docker build -t $ACR_SERVER/goride/trip-service:latest --platform linux/amd64 \
+  -f infra/production/azure/docker/trip-service.Dockerfile .
+
+# Driver Service
+docker build -t $ACR_SERVER/goride/driver-service:latest --platform linux/amd64 \
+  -f infra/production/azure/docker/driver-service.Dockerfile .
+
+# Payment Service
+docker build -t $ACR_SERVER/goride/payment-service:latest --platform linux/amd64 \
+  -f infra/production/azure/docker/payment-service.Dockerfile .
+
+docker push $ACR_SERVER/goride/api-gateway:latest
+docker push $ACR_SERVER/goride/trip-service:latest
+docker push $ACR_SERVER/goride/driver-service:latest
+docker push $ACR_SERVER/goride/payment-service:latest
 ```
 
-Next, upload each manifest by hand to make sure the correct order is maintained.
+#### Web frontend (special case)
+
+The frontend's `NEXT_PUBLIC_*` variables are **inlined into the JavaScript bundle at build time**, not read at runtime. They are passed as Docker build args from a gitignored file so real IPs never land in git:
 
 ```bash
-# First, apply the app-config and secrets
-kubectl apply -f infra/production/k8s/app-config.yaml
-kubectl apply -f infra/production/k8s/secrets.yaml
+# One time: create the build-env file (values depend on your deployed gateway IP, see step 7)
+cat > infra/production/azure/docker/web.env.build <<EOF
+NEXT_PUBLIC_API_URL=http://<API_GATEWAY_EXTERNAL_IP>:8081
+NEXT_PUBLIC_WEBSOCKET_URL=ws://<API_GATEWAY_EXTERNAL_IP>:8081/ws
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+EOF
 
-# Jaeger
-kubectl apply -f infra/production/k8s/jaeger-deployment.yaml
+docker build -t $ACR_SERVER/goride/web:latest --platform linux/amd64 \
+  --build-arg NEXT_PUBLIC_API_URL=$(grep '^NEXT_PUBLIC_API_URL=' infra/production/azure/docker/web.env.build | cut -d= -f2-) \
+  --build-arg NEXT_PUBLIC_WEBSOCKET_URL=$(grep '^NEXT_PUBLIC_WEBSOCKET_URL=' infra/production/azure/docker/web.env.build | cut -d= -f2-) \
+  --build-arg NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$(grep '^NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=' infra/production/azure/docker/web.env.build | cut -d= -f2-) \
+  -f infra/production/azure/docker/web.Dockerfile .
 
-# RabbitMQ
-kubectl apply -f infra/production/k8s/rabbitmq-deployment.yaml
-
-# Wait for both Jaeger and RabbitMQ to be running successfully
-
-# Then, apply the services
-kubectl apply -f infra/production/k8s/api-gateway-deployment.yaml
-# Wait until the API is up and then do the next and so on...
-kubectl apply -f infra/production/k8s/driver-service-deployment.yaml
-kubectl apply -f infra/production/k8s/trip-service-deployment.yaml
-kubectl apply -f infra/production/k8s/payment-service-deployment.yaml
+docker push $ACR_SERVER/goride/web:latest
 ```
 
-If you need to redeploy you can use the same command above or just `kubectl apply -f infra/production/k8s`
-Sometimes pods might need to be deleted for new ones to be deployed.
+> Tip: `./infra/production/azure/build-push-images.sh` builds and pushes everything in one shot (it reads `web.env.build` automatically for the web image).
+
+### 4. Create an AKS cluster
 
 ```bash
-kubectl get pods
-kubectl delete pod <pod-name>
+az provider register --namespace Microsoft.ContainerService
 
-# or for all deployments
-kubectl rollout restart deployment
+az aks create \
+  --resource-group $RESOURCE_GROUP \
+  --name $AKS_CLUSTER \
+  --node-count 2 \
+  --enable-managed-identity \
+  --attach-acr $ACR_NAME \
+  --generate-ssh-keys
 ```
 
-## 7. Enjoy!
+Key flag: `--attach-acr` grants the cluster's managed identity `AcrPull` on your registry — pods pull images with zero extra configuration (no `imagePullSecrets` needed).
+
+To tear the cluster down later:
 
 ```bash
-Get the External IP from the api-gateway
-kubectl get services
+az aks delete --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER --yes
 ```
 
-Go back to locally developing your project by changing kubernetes context
+### 5. Connect kubectl to AKS
+
+Replaces `gcloud container clusters get-credentials`:
+
+```bash
+az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER --overwrite-existing
+kubectl get nodes   # verify connectivity
+```
+
+To go back to local development afterwards:
 
 ```bash
 kubectl config get-contexts
-
-# For Docker Desktop
-kubectl config use-context docker-desktop
-
-# OR for Minikube
-kubectl config use-context minikube
+kubectl config use-context minikube   # or docker-desktop
 ```
+
+### 6. Apply Kubernetes manifests
+
+Apply in dependency order — shared config first, then infrastructure, then apps:
+
+```bash
+# Config & secrets first
+kubectl apply -f infra/production/azure/k8s/app-config.yaml
+kubectl apply -f infra/production/azure/k8s/secrets.yaml
+
+# Infrastructure services
+kubectl apply -f infra/production/azure/k8s/jaeger-deployment.yaml
+kubectl apply -f infra/production/azure/k8s/rabbitmq-deployment.yaml
+
+# Wait until Jaeger and RabbitMQ are Running (backend services fatal-exit without RabbitMQ)
+kubectl get pods -w
+
+# Application services
+kubectl apply -f infra/production/azure/k8s/api-gateway-deployment.yaml
+kubectl apply -f infra/production/azure/k8s/driver-service-deployment.yaml
+kubectl apply -f infra/production/azure/k8s/trip-service-deployment.yaml
+kubectl apply -f infra/production/azure/k8s/payment-service-deployment.yaml
+kubectl apply -f infra/production/azure/k8s/web-deployment.yaml
+```
+
+Redeploying:
+
+```bash
+kubectl rollout restart deployment/<name>   # restart one service
+kubectl rollout restart deployment          # restart everything
+kubectl delete pod <pod-name>               # nudge a single stuck pod
+```
+
+### 7. Get your URLs & wire up Stripe
+
+```bash
+kubectl get svc
+```
+
+Read the `EXTERNAL-IP` column of the `LoadBalancer` services (ignore `ClusterIP` rows — those are internal-only):
+
+- `web` EXTERNAL-IP → your frontend URL (`http://<WEB_IP>`)
+- `api-gateway` EXTERNAL-IP → your backend URL (`http://<GW_IP>:8081`)
+
+Register the Stripe webhook: Dashboard → Developers → Webhooks → Add endpoint:
+
+```
+http://<GW_IP>:8081/webhook/stripe
+```
+
+Select the `checkout.session.completed` event, copy the signing secret (`whsec_...`) into `secrets.yaml` as `STRIPE_WEBHOOK_KEY`, then:
+
+```bash
+kubectl apply -f infra/production/azure/k8s/secrets.yaml
+kubectl rollout restart deployment/api-gateway
+```
+
+Finally point checkout redirects at the frontend in `app-config.yaml`:
+
+```yaml
+STRIPE_SUCCESS_URL: "http://<WEB_IP>?payment=success"
+STRIPE_CANCEL_URL: "http://<WEB_IP>?payment=cancel"
+```
+
+```bash
+kubectl apply -f infra/production/azure/k8s/app-config.yaml
+kubectl rollout restart deployment/payment-service
+```
+
+> Remember: if either EXTERNAL-IP ever changes, you must rebuild the **web** image (build-time baked URLs) and re-register the Stripe webhook URL.
 
 ## Adding HTTPS to your API
 
-0. Reserve a static IP in GCP:
-   Go to the Google Cloud Console → VPC Network → External IP addresses.
-   Click "RESERVE STATIC ADDRESS".
-   Name it api-gateway-ip (to match your annotation).
-   Choose the same region as your GKE cluster (or "global" if using a global Ingress).
+Everything above serves plain HTTP on bare IPs. That's fine for testing, but it breaks real things:
 
-Confirm your IP exists:
+- Browsers disable powerful APIs on insecure origins — e.g. `crypto.randomUUID()` only exists in HTTPS/localhost contexts, which crashed this very app when served over `http://<IP>`
+- Stripe **requires** HTTPS endpoints for live-mode webhooks
+- No valid TLS = no trust: users see warnings, and cookies marked `Secure` don't work
 
-```bash
-gcloud compute addresses list
+### How TLS on Kubernetes works (the mental model)
+
+```
+Browser ──HTTPS──▶ Ingress (TLS terminates here) ──HTTP──▶ api-gateway Service ──▶ Pod
+                        │
+                        └─ reads private key/cert from a k8s Secret,
+                           auto-renewed by cert-manager via Let's Encrypt
 ```
 
-1. Add the ingress deployment
-2. Change from LoadBalancer to ClusterIP
-3. Apply the config
+Three moving parts:
+
+1. **A domain name** — Certificate Authorities (like Let's Encrypt) only issue certs for domains, not bare IPs. Buy one (~$10/year) and create an `A` record pointing it at your cluster.
+2. **Ingress controller** (nginx) — the single public entrypoint that owns port 443 and routes by hostname/path.
+3. **cert-manager** — automation daemon that proves domain ownership to Let's Encrypt (HTTP-01 challenge) and keeps the certificate renewed forever.
+
+### 0. Reserve a static public IP
+
+Load balancer IPs change whenever the Service is recreated — which silently breaks your DNS. Reserve one first:
 
 ```bash
-kubectl apply -f infra/production/k8s/api-gateway-ingress.yaml
-kubectl apply -f infra/production/k8s/api-gateway-deployment.yaml
+NODE_RG=$(az aks show -g $RESOURCE_GROUP -n $AKS_CLUSTER --query nodeResourceGroup -o tsv)
+
+az network public-ip create \
+  --resource-group $NODE_RG \
+  --name goride-api-ip \
+  --sku Standard \
+  --allocation-method static
 ```
 
-4. Get the IP address:
+Then pin it to the gateway service in `api-gateway-deployment.yaml`:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+spec:
+  type: LoadBalancer
+  # deprecated in upstream k8s, but still the standard mechanism on AKS
+  loadBalancerIP: <YOUR_STATIC_IP>
+  ports:
+    - port: 8081
+      targetPort: 8081
+  selector:
+    app: api-gateway
+```
+
+Point your domain's `A` record at this IP now (DNS propagation takes minutes to hours).
+
+### 1. Install the nginx ingress controller
+
+Requires [Helm](https://helm.sh/docs/intro/install/):
 
 ```bash
-kubectl get ingress api-gateway-ingress
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+
+helm install nginx-ingress ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx --create-namespace \
+  --set controller.service.loadBalancerIP=<YOUR_STATIC_IP> \
+  --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path"=/healthz
 ```
 
-You should also wait for SSL certificate to be provisioned. Check the status:
+This creates *another* LoadBalancer — the one above gets the static IP instead. Verify:
 
 ```bash
-kubectl describe managedcertificate api-gateway-cert
+kubectl get svc -n ingress-nginx
 ```
 
-Once the certificate is provisioned (you'll see a "Provisioning" status change to "Active")
+If you give the static IP to nginx-ingress (recommended — it becomes your permanent entrypoint), remove `loadBalancerIP` from api-gateway and let it become ClusterIP in step 4.
 
-5. The Ingress will automatically provision a Google-managed SSL certificate for the IP address. You can access your API using:
+### 2. Install cert-manager
 
 ```bash
-https://<IP_ADDRESS>
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+
+kubectl get pods -n cert-manager   # wait until all three pods are Running
 ```
 
-Note: Since this is using a self-signed certificate, browsers will show a security warning. This is normal and expected. You can:
+### 3. Create a Let's Encrypt issuer
 
-- Accept the warning in your browser (not recommended for production)
-- Use a proper domain name (recommended for production)
+Save as `infra/production/azure/k8s/letsencrypt-issuer.yaml`:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: you@example.com
+    privateKeySecretRef:
+      name: letsencrypt-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+```
+
+```bash
+kubectl apply -f infra/production/azure/k8s/letsencrypt-issuer.yaml
+```
+
+How the challenge works: Let's Encrypt asks "prove you own `api.yourdomain.com`" by requesting `http://api.yourdomain.com/.well-known/acme-challenge/<token>`. cert-manager temporarily publishes that token through the nginx ingress. If it resolves, the cert issues and auto-renews every ~60 days.
+
+### 4. Create the Ingress & switch the service to ClusterIP
+
+Save as `infra/production/azure/k8s/api-gateway-ingress.yaml`:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.yourdomain.com
+      secretName: api-gateway-tls     # cert-manager fills this Secret automatically
+  rules:
+    - host: api.yourdomain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8081
+```
+
+Then flip the api-gateway Service from `type: LoadBalancer` to `type: ClusterIP` (external traffic now enters through nginx, not directly):
+
+```bash
+kubectl apply -f infra/production/azure/k8s/api-gateway-ingress.yaml
+kubectl apply -f infra/production/azure/k8s/api-gateway-deployment.yaml
+```
+
+### 5. Verify
+
+```bash
+kubectl get certificate -n default
+# READY=True means issued; False = check events:
+kubectl describe certificate api-gateway-tls
+```
+
+Your API is now `https://api.yourdomain.com`. Final wiring updates:
+
+1. Stripe Dashboard: update the webhook URL to `https://api.yourdomain.com/webhook/stripe` (same signing secret)
+2. Rebuild the web image with `NEXT_PUBLIC_API_URL=https://api.yourdomain.com` and redeploy
+3. Update `STRIPE_SUCCESS_URL`/`CANCEL_URL` to `https://<your-web-host>`

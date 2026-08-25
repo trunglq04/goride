@@ -23,6 +23,16 @@ spec:
                 configMapKeyRef:
                   key: GATEWAY_HTTP_ADDR
                   name: app-config
+            - name: JAEGER_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  key: JAEGER_ENDPOINT
+                  name: app-config
+            - name: STRIPE_WEBHOOK_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: STRIPE_WEBHOOK_KEY
+                  name: app-secrets
           resources:
             requests:
               memory: "128Mi"

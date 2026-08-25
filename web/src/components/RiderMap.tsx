@@ -11,6 +11,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import { getGeohashBounds } from "../utils/geohash";
+import { uuid } from "@/utils/uuid";
 import { useMemo, useRef, useState } from "react";
 import { MapClickHandler } from "./MapClickHandler";
 import { Button } from "./ui/button";
@@ -56,7 +57,7 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
   const [selectedCarPackage] = useState<RouteFare | null>(null);
   const [destination, setDestination] = useState<[number, number] | null>(null);
   const mapRef = useRef<L.Map>(null);
-  const userID = useMemo(() => crypto.randomUUID(), []);
+  const userID = useMemo(() => uuid(), []);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const location = {
@@ -73,8 +74,6 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
     resetTripStatus,
     setTripStatus,
   } = useRiderStreamConnection(location, userID);
-
-  console.log(tripStatus);
 
   const handleMapClick = async (e: L.LeafletMouseEvent) => {
     if (trip?.tripID) {
@@ -129,8 +128,17 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
 
     const response = await fetch(`${API_URL}${BackendEndpoints.PREVIEW_TRIP}`, {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(payload),
     });
+    
+    if (!response.ok) {
+      console.error("Preview trip failed:", await response.text());
+      throw new Error("Failed to preview trip");
+    }
+
     const { data } = (await response.json()) as {
       data: HTTPTripPreviewResponse;
     };
@@ -150,8 +158,18 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
 
     const response = await fetch(`${API_URL}${BackendEndpoints.START_TRIP}`, {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(payload),
     });
+
+    if (!response.ok) {
+      console.error("Start trip failed:", await response.text());
+      alert("Failed to start trip. Please try again.");
+      return;
+    }
+
     const { data } = (await response.json()) as {
       data: HTTPTripStartResponse;
     };
@@ -169,6 +187,7 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
 
     return data;
   };
+  console.log("Trip Status:", tripStatus);
 
   const handleCancelTrip = () => {
     setTrip(null);

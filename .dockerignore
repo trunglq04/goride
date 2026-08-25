@@ -11,6 +11,10 @@ web/node_modules/
 .vscode/
 .DS_Store
 
+# Exclude env files (injected via --build-arg instead)
+.env*
+web/.env*
+
 # Include shared code
 !shared/
 

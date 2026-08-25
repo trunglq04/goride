@@ -17,12 +17,6 @@ spec:
           image: goridecr.azurecr.io/goride/driver-service
           ports:
             - containerPort: 9092
-          env:
-            - name: RABBITMQ_URI
-              valueFrom:
-                secretKeyRef:
-                  name: rabbitmq-credentials
-                  key: uri
           resources:
             requests:
               memory: "64Mi"
@@ -42,6 +36,18 @@ spec:
               port: 9092
             initialDelaySeconds: 15
             periodSeconds: 10
+          env:
+            - name: RABBITMQ_URI
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: RABBITMQ_URI
+            - name: JAEGER_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: JAEGER_ENDPOINT
+
 ---
 apiVersion: v1
 kind: Service

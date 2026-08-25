@@ -28,18 +28,18 @@ spec:
             - name: GATEWAY_HTTP_ADDR
               valueFrom:
                 configMapKeyRef:
-                  name: app-config
                   key: GATEWAY_HTTP_ADDR
+                  name: app-config
             - name: STRIPE_WEBHOOK_KEY
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
                   key: STRIPE_WEBHOOK_KEY
+                  name: app-secrets
             - name: JAEGER_ENDPOINT
               valueFrom:
                 configMapKeyRef:
-                  name: app-config
                   key: JAEGER_ENDPOINT
+                  name: app-config
 ---
 apiVersion: v1
 kind: Service

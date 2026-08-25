@@ -63,3 +63,6 @@ build/
 
 # Secrets
 secrets.yaml
+
+# Web build-time env (injected via --build-arg)
+infra/production/azure/docker/web.env.build
