@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -14,6 +13,7 @@ import (
 	"github.com/trunglq04/goride/services/trip-service/internal/service"
 	"github.com/trunglq04/goride/shared/db"
 	"github.com/trunglq04/goride/shared/env"
+	"github.com/trunglq04/goride/shared/logger"
 	"github.com/trunglq04/goride/shared/messaging"
 	"github.com/trunglq04/goride/shared/tracing"
 
@@ -23,6 +23,9 @@ import (
 var GrpcAddr = ":9093"
 
 func main() {
+	logger.Setup("trip-service")
+	log := logger.L()
+
 	// Initialize Tracing
 	tracerCfg := tracing.Config{
 		ServiceName:    "trip-service",
@@ -32,7 +35,7 @@ func main() {
 
 	traceShutdown, err := tracing.InitTracer(tracerCfg)
 	if err != nil {
-		log.Fatalf("ERROR: Failed to initialize the tracer: %v", err)
+		logger.Fatal("Failed to initialize the tracer", "err", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -41,7 +44,7 @@ func main() {
 	// Init MongoDB
 	mongoClient, err := db.NewMongoClient(ctx, db.NewMongoDefaultConfig())
 	if err != nil {
-		log.Fatalf("Failed to initialize MongoDB, err: %v", err)
+		logger.Fatal("Failed to initialize MongoDB", "err", err)
 	}
 	defer mongoClient.Disconnect(ctx)
 
@@ -51,7 +54,7 @@ func main() {
 
 	mongoDBRepo := repository.NewMongoRepository(mongodb)
 	if err := mongoDBRepo.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("ERROR: Failed to ensure indexes: %v", err)
+		logger.Fatal("Failed to ensure indexes", "err", err)
 	}
 
 	svc := service.NewService(mongoDBRepo)
@@ -65,16 +68,16 @@ func main() {
 
 	lis, err := net.Listen("tcp", GrpcAddr)
 	if err != nil {
-		log.Fatalf("ERROR: Failed to listen: %v", err)
+		logger.Fatal("Failed to listen", "addr", GrpcAddr, "err", err)
 	}
 
 	// RabbitMQ connection
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal("Failed to connect to RabbitMQ", "err", err)
 	}
 	defer rabbitmq.Close()
-	log.Println("Starting RabbitMQ connection")
+	log.Info("RabbitMQ connected")
 
 	// Start trip publisher
 	publisher := events.NewTripEventPublisher(rabbitmq)
@@ -83,7 +86,7 @@ func main() {
 	driverConsumer := events.NewDriverConsumer(rabbitmq, svc)
 	go func() {
 		if err := driverConsumer.Listen(); err != nil {
-			log.Fatalf("ERROR: Failed to listen to the message: %v", err)
+			logger.Fatal("Failed to listen for driver messages", "err", err)
 		}
 	}()
 
@@ -91,26 +94,30 @@ func main() {
 	paymentConsumer := events.NewPaymentConsumer(rabbitmq, svc)
 	go func() {
 		if err := paymentConsumer.Listen(); err != nil {
-			log.Fatalf("ERROR: Failed to listen to the message: %v", err)
+			logger.Fatal("Failed to listen for payment messages", "err", err)
 		}
 	}()
 
 	// Starting the gRPC server
-	grpcServer := grpcserver.NewServer(tracing.WithTracingInterceptors()...)
+	grpcServer := grpcserver.NewServer(append(
+		tracing.WithTracingInterceptors(),
+		grpcserver.ChainUnaryInterceptor(logger.GrpcUnaryServerInterceptor()),
+		grpcserver.ChainStreamInterceptor(logger.GrpcStreamServerInterceptor()),
+	)...)
 	grpc.NewGRPCHandler(grpcServer, svc, publisher)
 
-	log.Printf("Starting gRPC server Trip service on port %s", lis.Addr().String())
+	log.Info("Starting gRPC server Trip service", "addr", lis.Addr().String())
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
-			log.Printf("ERROR: Failed to serve: %v", err)
+			log.Error("gRPC server failed to serve", "err", err)
 			cancel()
 		}
 	}()
 
 	// wait for the shutdown signal
 	<-ctx.Done()
-	log.Printf("Shutting down the server...")
+	log.Info("Shutting down trip-service...")
 	grpcServer.GracefulStop()
 
 }

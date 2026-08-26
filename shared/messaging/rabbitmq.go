@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/rabbitmq/amqp091-go"
@@ -22,6 +22,22 @@ type RabbitMQ struct {
 	conn    *amqp091.Connection
 	Channel *amqp091.Channel
 	mu      sync.Mutex
+}
+
+// QueueOptions holds optional configuration for queue declaration.
+type QueueOptions struct {
+	// Time to live of the message in milliseconds (x-message-ttl).
+	TTL int64
+}
+
+// QueueOption is a functional option for declareAndBindQueue.
+type QueueOption func(*QueueOptions)
+
+// WithTTL sets the message TTL (in milliseconds) on the queue.
+func WithTTL(ms int64) QueueOption {
+	return func(o *QueueOptions) {
+		o.TTL = ms
+	}
 }
 
 func NewRabbitMQ(uri string) (*RabbitMQ, error) {
@@ -61,7 +77,11 @@ func (r *RabbitMQ) Close() {
 }
 
 func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, message contracts.AmqpMessage) error {
-	log.Printf("Publishing message with routing key: %s", routingKey)
+	slog.DebugContext(ctx, "Publishing message",
+		"exchange", TripExchange,
+		"routing_key", routingKey,
+		"owner_id", message.OwnerID,
+	)
 
 	jsonMsg, err := json.Marshal(message)
 	if err != nil {
@@ -111,14 +131,25 @@ func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) err
 	go func() {
 		for msg := range msgs {
 			if err := tracing.TracedConsumer(msg, func(ctx context.Context, delivery amqp091.Delivery) error {
-				log.Printf("Received a message: %s", msg.Body)
+				slog.DebugContext(ctx, "Received a message",
+					"queue", queueName,
+					"routing_key", delivery.RoutingKey,
+					"message_id", delivery.MessageId,
+					"body_size", len(delivery.Body),
+				)
 
 				cfg := retry.DefaultConfig()
 				err := retry.WithBackoff(ctx, cfg, func() error {
 					return handler(ctx, delivery)
 				})
 				if err != nil {
-					log.Printf("Message processing failed after %d retries for message ID: %s, err: %v", cfg.MaxRetries, delivery.MessageId, err)
+					slog.ErrorContext(ctx, "Message processing failed after retries, sending to DLQ",
+						"queue", queueName,
+						"routing_key", delivery.RoutingKey,
+						"message_id", delivery.MessageId,
+						"max_retries", cfg.MaxRetries,
+						"err", err,
+					)
 
 					// Add failure context before sending to the DLQ
 					header := amqp091.Table{}
@@ -139,13 +170,17 @@ func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) err
 
 				// Ack only on success
 				if ackErr := msg.Ack(false); ackErr != nil {
-					log.Printf("ERROR: Failed to ack the message: %v. Message body: %s", ackErr, msg.Body)
+					slog.ErrorContext(ctx, "Failed to ack the message",
+						"queue", queueName,
+						"message_id", delivery.MessageId,
+						"err", ackErr,
+					)
 					return ackErr
 				}
 
 				return nil
 			}); err != nil {
-				log.Printf("Error processing the message: %v", err)
+				slog.Error("Error processing the message", "queue", queueName, "err", err)
 			}
 
 		}
@@ -259,10 +294,15 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		return err
 	}
 
+	// Notification queues: 5-minute TTL so stale notifications are
+	// dead-lettered rather than delivered to a client that has moved on.
+	const notifyTTL = 24 * 60 * 60 * 1000 // 300 000 ms
+
 	err = r.declareAndBindQueue(
 		NotifyDriverNoDriversFoundQueue,
 		[]string{contracts.TripEventNoDriversFound},
 		TripExchange,
+		WithTTL(notifyTTL),
 	)
 	if err != nil {
 		return err
@@ -272,6 +312,7 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		NotifyDriverAssignQueue,
 		[]string{contracts.TripEventDriverAssigned},
 		TripExchange,
+		WithTTL(notifyTTL),
 	)
 	if err != nil {
 		return err
@@ -281,6 +322,7 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		NotifyDriverLocationQueue,
 		[]string{contracts.DriverCmdLocation},
 		TripExchange,
+		WithTTL(notifyTTL),
 	)
 	if err != nil {
 		return err
@@ -299,6 +341,7 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		NotifyPaymentSessionCreatedQueue,
 		[]string{contracts.PaymentEventSessionCreated},
 		TripExchange,
+		WithTTL(notifyTTL),
 	)
 	if err != nil {
 		return err
@@ -308,6 +351,7 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		NotifyPaymentSuccessQueue,
 		[]string{contracts.PaymentEventSuccess},
 		TripExchange,
+		WithTTL(notifyTTL),
 	)
 	if err != nil {
 		return err
@@ -316,10 +360,20 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 	return nil
 }
 
-func (r *RabbitMQ) declareAndBindQueue(queueName string, messageTypes []string, exchange string) error {
-	// Add dead letter queue used for all the queue
-	args := amqp091.Table{
-		"x-dead-letter-exchange": DeadLetterExchange,
+func (r *RabbitMQ) declareAndBindQueue(queueName string, messageTypes []string, exchange string, opts ...QueueOption) error {
+	// Apply functional options
+	qOpts := &QueueOptions{}
+	for _, opt := range opts {
+		opt(qOpts)
+	}
+
+	// All queues use the dead-letter exchange
+	args := amqp091.Table{}
+	args["x-dead-letter-exchange"] = DeadLetterExchange
+
+	// Optionally set a per-queue message TTL
+	if qOpts.TTL > 0 {
+		args["x-message-ttl"] = qOpts.TTL
 	}
 
 	q, err := r.Channel.QueueDeclare(
@@ -331,7 +385,7 @@ func (r *RabbitMQ) declareAndBindQueue(queueName string, messageTypes []string, 
 		args,      // arguments with DLX config
 	)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to declare queue %s: %v", queueName, err)
 	}
 
 	for _, msg := range messageTypes {

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"math/rand"
 
 	"github.com/rabbitmq/amqp091-go"
@@ -51,17 +51,29 @@ func (c *TripConsumer) Listen() error {
 func (c *TripConsumer) handleTripEvents(ctx context.Context, msg amqp091.Delivery) error {
 	var tripEvent contracts.AmqpMessage
 	if err := json.Unmarshal(msg.Body, &tripEvent); err != nil {
-		log.Printf("ERROR: Failed to unmarshal message: %v", err)
+		slog.ErrorContext(ctx, "Failed to unmarshal trip event message",
+			"queue", messaging.FindAvailableDriversQueue,
+			"routing_key", msg.RoutingKey,
+			"err", err,
+		)
 		return err
 	}
 
 	var payload messaging.TripEventData
 	if err := json.Unmarshal(tripEvent.Data, &payload); err != nil {
-		log.Printf("ERROR: Failed to unmarshal payload: %v", err)
+		slog.ErrorContext(ctx, "Failed to unmarshal trip event payload",
+			"queue", messaging.FindAvailableDriversQueue,
+			"routing_key", msg.RoutingKey,
+			"trip_id", payload.Trip.GetId(),
+			"err", err,
+		)
 		return err
 	}
 
-	log.Printf("Driver received message: %+v", payload)
+	slog.InfoContext(ctx, "Trip event received",
+		"routing_key", msg.RoutingKey,
+		"trip_id", payload.Trip.GetId(),
+	)
 
 	switch msg.RoutingKey {
 	case contracts.TripEventCreated, contracts.TripEventDriverNotInterested:
@@ -69,7 +81,7 @@ func (c *TripConsumer) handleTripEvents(ctx context.Context, msg amqp091.Deliver
 			return err
 		}
 	default:
-		log.Printf("unknown trip event routing key: %s", msg.RoutingKey)
+		slog.WarnContext(ctx, "Unknown trip event routing key", "routing_key", msg.RoutingKey)
 	}
 
 	return nil
@@ -78,18 +90,31 @@ func (c *TripConsumer) handleTripEvents(ctx context.Context, msg amqp091.Deliver
 func (c *TripConsumer) handleDriverLocationUpdate(ctx context.Context, msg amqp091.Delivery) error {
 	var locationEvent contracts.AmqpMessage
 	if err := json.Unmarshal(msg.Body, &locationEvent); err != nil {
-		log.Printf("ERROR: Failed to unmarshal message: %v", err)
+		slog.ErrorContext(ctx, "Failed to unmarshal location update message",
+			"queue", messaging.NotifyDriverLocationQueue,
+			"routing_key", msg.RoutingKey,
+			"driver_id", locationEvent.OwnerID,
+			"err", err,
+		)
 		return err
 	}
 
 	var req pb.UpdateDriverLocationRequest
 	if err := json.Unmarshal(locationEvent.Data, &req); err != nil {
-		log.Printf("ERROR: Failed to unmarshal payload: %v", err)
+		slog.ErrorContext(ctx, "Failed to unmarshal location update payload",
+			"queue", messaging.NotifyDriverLocationQueue,
+			"routing_key", msg.RoutingKey,
+			"driver_id", locationEvent.OwnerID,
+			"err", err,
+		)
 		return err
 	}
 
 	if _, err := c.service.UpdateDriverLocation(locationEvent.OwnerID, req.GetLocation(), req.GetGeohash()); err != nil {
-		log.Printf("ERROR: Failed to update driver location: %v", err)
+		slog.ErrorContext(ctx, "Failed to update driver location",
+			"driver_id", locationEvent.OwnerID,
+			"err", err,
+		)
 		return err
 	}
 
@@ -97,22 +122,35 @@ func (c *TripConsumer) handleDriverLocationUpdate(ctx context.Context, msg amqp0
 }
 
 func (c *TripConsumer) handleFindAndNotifyDrivers(ctx context.Context, payload messaging.TripEventData) error {
+	packageSlug := payload.Trip.GetSelectedFare().GetPackageSlug()
+
 	suitableIDs := c.service.FindAvailableDrivers(
-		payload.Trip.GetSelectedFare().PackageSlug,
+		packageSlug,
 		payload.ExcludeDriverIDs,
 	)
 
-	log.Printf("Found suitable %v drivers", len(suitableIDs))
+	slog.InfoContext(ctx, "Searching for suitable drivers",
+		"package_slug", packageSlug,
+		"found", len(suitableIDs),
+		"excluded_drivers", len(payload.ExcludeDriverIDs),
+	)
 
 	if len(suitableIDs) == 0 {
-		log.Printf("No suitable drivers found for packageSlug=%q, notifying rider", payload.Trip.GetSelectedFare().GetPackageSlug())
+		slog.WarnContext(ctx, "No suitable drivers found, notifying rider",
+			"package_slug", packageSlug,
+			"trip_id", payload.Trip.GetId(),
+		)
 		// Notify the rider that no drivers are available
 		if err := c.rabbitmq.PublishMessage(ctx,
 			contracts.TripEventNoDriversFound,
 			contracts.AmqpMessage{
 				OwnerID: payload.Trip.UserID,
 			}); err != nil {
-			log.Printf("ERROR: Failed to publish message to exchange: %v", err)
+			slog.ErrorContext(ctx, "Failed to publish no-drivers-found event",
+				"routing_key", contracts.TripEventNoDriversFound,
+				"trip_id", payload.Trip.GetId(),
+				"err", err,
+			)
 			return err
 		}
 
@@ -124,6 +162,10 @@ func (c *TripConsumer) handleFindAndNotifyDrivers(ctx context.Context, payload m
 
 	marshalledEvent, err := json.Marshal(payload)
 	if err != nil {
+		slog.ErrorContext(ctx, "Failed to marshal trip event",
+			"trip_id", payload.Trip.GetId(),
+			"err", err,
+		)
 		return err
 	}
 
@@ -134,9 +176,20 @@ func (c *TripConsumer) handleFindAndNotifyDrivers(ctx context.Context, payload m
 			OwnerID: suitableDriverID,
 			Data:    marshalledEvent,
 		}); err != nil {
-		log.Printf("ERROR: Failed to publish message to exchange: %v", err)
+		slog.ErrorContext(ctx, "Failed to publish trip request to driver",
+			"routing_key", contracts.DriverCmdTripRequest,
+			"driver_id", suitableDriverID,
+			"trip_id", payload.Trip.GetId(),
+			"err", err,
+		)
 		return err
 	}
+
+	slog.InfoContext(ctx, "Trip request sent to driver",
+		"driver_id", suitableDriverID,
+		"trip_id", payload.Trip.GetId(),
+		"package_slug", packageSlug,
+	)
 
 	return nil
 }

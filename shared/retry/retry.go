@@ -6,7 +6,7 @@ package retry
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -32,7 +32,11 @@ func WithBackoff(ctx context.Context, cfg Config, operation func() error) error 
 
 	for attempt := 0; attempt <= cfg.MaxRetries; attempt++ {
 		if attempt > 0 {
-			log.Printf("Retry attempt %d/%d after %v", attempt, cfg.MaxRetries, wait)
+			slog.DebugContext(ctx, "Retrying operation",
+				"attempt", attempt,
+				"max_retries", cfg.MaxRetries,
+				"wait", wait.String(),
+			)
 
 			select {
 			case <-ctx.Done():
@@ -51,7 +55,11 @@ func WithBackoff(ctx context.Context, cfg Config, operation func() error) error 
 			return nil
 		}
 
-		log.Printf("Operation Failed (attempt %d/%d): %v", attempt, cfg.MaxRetries, err)
+		slog.WarnContext(ctx, "Operation failed",
+			"attempt", attempt+1,
+			"max_retries", cfg.MaxRetries+1,
+			"err", err,
+		)
 	}
 
 	return err

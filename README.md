@@ -273,6 +273,10 @@ kubectl rollout restart deployment/payment-service
 
 ## Adding HTTPS to your API
 
+> Already applied on `goride-aks` (2026-08-26) — see
+> [docs/architecture/ingress-setup-guide.md](docs/architecture/ingress-setup-guide.md)
+> for what was actually done and why, including how the 2-public-IP quota issue was resolved.
+
 Everything above serves plain HTTP on bare IPs. That's fine for testing, but it breaks real things:
 
 - Browsers disable powerful APIs on insecure origins — e.g. `crypto.randomUUID()` only exists in HTTPS/localhost contexts, which crashed this very app when served over `http://<IP>`
@@ -282,17 +286,18 @@ Everything above serves plain HTTP on bare IPs. That's fine for testing, but it 
 ### How TLS on Kubernetes works (the mental model)
 
 ```
-Browser ──HTTPS──▶ Ingress (TLS terminates here) ──HTTP──▶ api-gateway Service ──▶ Pod
-                        │
-                        └─ reads private key/cert from a k8s Secret,
-                           auto-renewed by cert-manager via Let's Encrypt
+Browser ──HTTPS──▶ Cloudflare edge ──HTTPS (Full strict)──▶ Ingress ──HTTP──▶ api-gateway Service ──▶ Pod
+ (TLS hop 1)         (CDN/WAF, hides origin)                (TLS hop 2 terminates here,
+                                                             reads cert from k8s Secret,
+                                                             auto-renewed by cert-manager)
 ```
 
-Three moving parts:
+Four moving parts:
 
 1. **A domain name** — Certificate Authorities (like Let's Encrypt) only issue certs for domains, not bare IPs. Buy one (~$10/year) and create an `A` record pointing it at your cluster.
 2. **Ingress controller** (nginx) — the single public entrypoint that owns port 443 and routes by hostname/path.
 3. **cert-manager** — automation daemon that proves domain ownership to Let's Encrypt (HTTP-01 challenge) and keeps the certificate renewed forever.
+4. **Cloudflare (proxy)** — both hostnames are proxied through Cloudflare: public DNS returns CF anycast IPs, the real origin IP stays hidden, and TLS hop #2 must be set to **Full (strict)** so Cloudflare validates our Let's Encrypt cert.
 
 ### 0. Reserve a static public IP
 

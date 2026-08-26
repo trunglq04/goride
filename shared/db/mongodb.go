@@ -3,7 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/trunglq04/goride/shared/env"
@@ -54,7 +54,8 @@ func NewMongoClient(ctx context.Context, cfg *MongoConfig) (*mongo.Client, error
 		return nil, err
 	}
 
-	log.Printf("Successfully connected to MongoDB at %s", cfg.URI)
+	// Do not log the URI: it may contain credentials.
+	slog.Info("Successfully connected to MongoDB", "database", cfg.Database)
 	return client, nil
 }
 

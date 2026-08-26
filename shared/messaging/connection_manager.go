@@ -2,7 +2,7 @@ package messaging
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 
@@ -57,7 +57,7 @@ func (cm *ConnectionManager) Add(id string, conn *websocket.Conn) {
 		mu:   sync.Mutex{},
 	}
 
-	log.Printf("Added connection for user: %s", id)
+	slog.Debug("WebSocket connection added", "user_id", id, "total_connections", len(cm.connections))
 }
 
 func (cm *ConnectionManager) Remove(id string) {
@@ -66,7 +66,7 @@ func (cm *ConnectionManager) Remove(id string) {
 
 	delete(cm.connections, id)
 
-	log.Printf("Removed connection for user: %s", id)
+	slog.Debug("WebSocket connection removed", "user_id", id, "total_connections", len(cm.connections))
 }
 
 func (cm *ConnectionManager) Get(id string) (*websocket.Conn, bool) {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +11,7 @@ import (
 	"github.com/trunglq04/goride/services/payment-service/internal/service"
 	"github.com/trunglq04/goride/services/payment-service/pkg/types"
 	"github.com/trunglq04/goride/shared/env"
+	"github.com/trunglq04/goride/shared/logger"
 	"github.com/trunglq04/goride/shared/messaging"
 	"github.com/trunglq04/goride/shared/tracing"
 )
@@ -19,6 +19,9 @@ import (
 var GrpcAddr = env.GetString("GRPC_ADDR", ":9004")
 
 func main() {
+	logger.Setup("payment-service")
+	log := logger.L()
+
 	// Initialize Tracing
 	tracerCfg := tracing.Config{
 		ServiceName:    "payment-service",
@@ -28,7 +31,7 @@ func main() {
 
 	traceShutdown, err := tracing.InitTracer(tracerCfg)
 	if err != nil {
-		log.Fatalf("ERROR: Failed to initialize the tracer: %v", err)
+		logger.Fatal("Failed to initialize the tracer", "err", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer traceShutdown(ctx)
@@ -52,7 +55,7 @@ func main() {
 		CancelURL:       env.GetString("STRIPE_CANCEL_URL", appURL+"?payment=cancel"),
 	}
 	if stripeCfg.StripeSecretKey == "" {
-		log.Fatalf("STRIPE_SECRET_KEY is not set")
+		logger.Fatal("STRIPE_SECRET_KEY is not set")
 		return
 	}
 
@@ -65,17 +68,19 @@ func main() {
 	// RabbitMQ connection
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal("Failed to connect to RabbitMQ", "err", err)
 	}
 	defer rabbitmq.Close()
 
-	log.Println("Starting RabbitMQ connection")
+	log.Info("RabbitMQ connected")
 
 	// Trip Consumer
 	tripConsumer := events.NewTripConsumer(rabbitmq, svc)
 	go tripConsumer.Listen()
 
+	log.Info("Payment service started")
+
 	// wait for the shutdown signal
 	<-ctx.Done()
-	log.Printf("Shutting down the server...")
+	log.Info("Shutting down payment-service...")
 }

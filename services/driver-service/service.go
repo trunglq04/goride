@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	math "math/rand/v2"
 
 	"github.com/mmcloughlin/geohash"
@@ -77,7 +77,10 @@ func (s *Service) RegisterDriver(driverId string, packageSlug string) (*pb.Drive
 	}
 	s.mu.Unlock()
 
-	log.Printf("Succesfully REGISTER a DRIVER: %v, packageSlug: %v\n", driver.Id, driver.PackageSlug)
+	slog.Info("Driver registered",
+		"driver_id", driver.Id,
+		"package_slug", driver.PackageSlug,
+	)
 
 	return driver, nil
 }
@@ -88,7 +91,7 @@ func (s *Service) UnregisterDriver(driverId string) {
 
 	delete(s.drivers, driverId)
 	if _, ok := s.drivers[driverId]; !ok {
-		log.Println("Succesfully UNREGISTER a DRIVER:", driverId)
+		slog.Info("Driver unregistered", "driver_id", driverId)
 	}
 }
 
@@ -110,7 +113,13 @@ func (s *Service) UpdateDriverLocation(driverId string, location *pb.Location, g
 
 	s.mu.Unlock()
 
-	log.Printf("Succesfully UPDATE a DRIVER: %v, packageSlug: %v, location: %+v\n", driver.Id, driver.PackageSlug, location)
+	slog.Info("Driver location updated",
+		"driver_id", driver.Id,
+		"package_slug", driver.PackageSlug,
+		"latitude", location.GetLatitude(),
+		"longitude", location.GetLongitude(),
+		"geohash", geohash,
+	)
 
 	return driver, nil
 }

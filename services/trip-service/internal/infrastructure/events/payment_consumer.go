@@ -3,7 +3,7 @@ package events
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/trunglq04/goride/services/trip-service/internal/domain"
@@ -29,24 +29,45 @@ func (c *paymentConsumer) Listen() error {
 		func(ctx context.Context, msg amqp091.Delivery) error {
 			var message contracts.AmqpMessage
 			if err := json.Unmarshal(msg.Body, &message); err != nil {
-				log.Printf("ERROR: Failed to unmarshal message: %v", err)
+				slog.ErrorContext(ctx, "Failed to unmarshal payment status message",
+					"queue", messaging.NotifyPaymentSuccessQueue,
+					"routing_key", msg.RoutingKey,
+					"err", err,
+				)
 				return err
 			}
 
 			var payload messaging.PaymentStatusUpdateData
 			if err := json.Unmarshal(message.Data, &payload); err != nil {
-				log.Printf("ERROR: Failed to unmarshal payload: %v", err)
+				slog.ErrorContext(ctx, "Failed to unmarshal payment status payload",
+					"queue", messaging.NotifyPaymentSuccessQueue,
+					"routing_key", msg.RoutingKey,
+					"trip_id", payload.TripID,
+					"err", err,
+				)
 				return err
 			}
 
-			log.Printf("Trip has been completed and payed.")
+			slog.InfoContext(ctx, "Trip completed and payed, updating trip status",
+				"trip_id", payload.TripID,
+				"user_id", payload.UserID,
+				"driver_id", payload.DriverID,
+			)
 
-			return c.service.UpdateTrip(
+			if err := c.service.UpdateTrip(
 				ctx,
 				payload.TripID,
 				"payed",
 				nil,
 				nil,
-			)
+			); err != nil {
+				slog.ErrorContext(ctx, "Failed to update trip status to payed",
+					"trip_id", payload.TripID,
+					"err", err,
+				)
+				return err
+			}
+
+			return nil
 		})
 }

@@ -2,11 +2,11 @@ package grpc
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/trunglq04/goride/services/trip-service/internal/domain"
 	"github.com/trunglq04/goride/services/trip-service/internal/infrastructure/events"
+	"github.com/trunglq04/goride/shared/logger"
 	pb "github.com/trunglq04/goride/shared/proto/trip"
 	types "github.com/trunglq04/goride/shared/types"
 
@@ -44,6 +44,11 @@ func (h *gRPCHandler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest)
 	// 2. Call create trip.
 	trip, err := h.service.CreateTrip(ctx, rideFare)
 	if err != nil {
+		logger.L().ErrorContext(ctx, "Failed to create trip",
+			"user_id", userID,
+			"fare_id", fareID,
+			"err", err,
+		)
 		return nil, status.Errorf(codes.Internal, "Failed to create trip: %v", err)
 	}
 	// 3. Initialize an empty driver to the trip.
@@ -51,8 +56,19 @@ func (h *gRPCHandler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest)
 	defer cancel()
 
 	if err = h.publisher.PublishTripCreated(ctx, trip); err != nil {
+		logger.L().ErrorContext(ctx, "Failed to publish trip created event",
+			"trip_id", trip.ID.Hex(),
+			"user_id", userID,
+			"err", err,
+		)
 		return nil, status.Errorf(codes.Internal, "Failed to publish the trip created event: %v", err)
 	}
+
+	logger.L().InfoContext(ctx, "Trip created",
+		"trip_id", trip.ID.Hex(),
+		"user_id", userID,
+		"fare_id", fareID,
+	)
 
 	return &pb.CreateTripResponse{
 		TripID: trip.ID.Hex(),
@@ -77,7 +93,12 @@ func (h *gRPCHandler) PreviewTrip(ctx context.Context, rq *pb.PreviewTripRequest
 
 	route, err := h.service.GetRoute(ctx, pickup, destination, true)
 	if err != nil {
-		log.Println(err)
+		logger.L().ErrorContext(ctx, "Failed to get route",
+			"user_id", rq.UserID,
+			"pickup", pickup,
+			"destination", destination,
+			"err", err,
+		)
 		return nil, status.Errorf(codes.Internal, "Failed to get route: %v", err)
 	}
 
@@ -86,8 +107,19 @@ func (h *gRPCHandler) PreviewTrip(ctx context.Context, rq *pb.PreviewTripRequest
 	// 2. Store the ride fares for the create trip to fetch and validate
 	fares, err := h.service.GenerateTripFares(ctx, estimatedFares, rq.UserID, route)
 	if err != nil {
+		logger.L().ErrorContext(ctx, "Failed to generate trip fares",
+			"user_id", rq.UserID,
+			"err", err,
+		)
 		return nil, status.Errorf(codes.Internal, "Failed to get route: %v", err)
 	}
+
+	logger.L().InfoContext(ctx, "Trip preview generated",
+		"user_id", rq.UserID,
+		"distance", route.Routes[0].Distance,
+		"duration", route.Routes[0].Duration,
+		"fares", len(fares),
+	)
 
 	return &pb.PreviewTripResponse{
 		Route:     route.ToProto(),

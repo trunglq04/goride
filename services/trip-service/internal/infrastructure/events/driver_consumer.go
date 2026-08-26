@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/trunglq04/goride/services/trip-service/internal/domain"
@@ -32,33 +32,57 @@ func (c *driverConsumer) Listen() error {
 			var message contracts.AmqpMessage
 			err := json.Unmarshal(msg.Body, &message)
 			if err != nil {
-				log.Printf("ERROR: Failed to unmarshal message: %v", err)
+				slog.ErrorContext(ctx, "Failed to unmarshal driver response message",
+					"queue", messaging.DriverTripResponseQueue,
+					"routing_key", msg.RoutingKey,
+					"err", err,
+				)
 				return err
 			}
 
 			var payload messaging.DriverTripResponseData
 			err = json.Unmarshal(message.Data, &payload)
 			if err != nil {
-				log.Printf("ERROR: Failed to unmarshal driver trip response: %v", err)
+				slog.ErrorContext(ctx, "Failed to unmarshal driver trip response payload",
+					"queue", messaging.DriverTripResponseQueue,
+					"routing_key", msg.RoutingKey,
+					"trip_id", payload.TripID,
+					"err", err,
+				)
 				return err
 			}
 
-			log.Printf("Driver response received message: %+v", payload)
+			slog.InfoContext(ctx, "Driver trip response received",
+				"routing_key", msg.RoutingKey,
+				"trip_id", payload.TripID,
+				"driver_id", payload.Driver.GetId(),
+			)
 
 			switch msg.RoutingKey {
 			case contracts.DriverCmdTripAccept:
 				if err := c.handleTripAccepted(ctx, payload.TripID, payload.Driver); err != nil {
-					log.Printf("ERROR: Failed to handle the trip accept: %v", err)
+					slog.ErrorContext(ctx, "Failed to handle the trip accept",
+						"trip_id", payload.TripID,
+						"driver_id", payload.Driver.GetId(),
+						"err", err,
+					)
 					return err
 				}
 			case contracts.DriverCmdTripDecline:
 				if err := c.handleTripDeclined(ctx, payload.TripID, payload.RiderID, payload.Driver.Id); err != nil {
-					log.Printf("ERROR: Failed to handle the trip decline: %v", err)
+					slog.ErrorContext(ctx, "Failed to handle the trip decline",
+						"trip_id", payload.TripID,
+						"driver_id", payload.Driver.Id,
+						"rider_id", payload.RiderID,
+						"err", err,
+					)
 					return err
 				}
 			default:
 				// Unknown routing key — discard, do not requeue.
-				log.Printf("Unknown driver response routing key: %s", msg.RoutingKey)
+				slog.WarnContext(ctx, "Unknown driver response routing key",
+					"routing_key", msg.RoutingKey,
+				)
 			}
 			return nil
 		})
@@ -66,6 +90,11 @@ func (c *driverConsumer) Listen() error {
 
 func (c *driverConsumer) handleTripDeclined(ctx context.Context, tripID, riderID, driverID string) error {
 	// When a driver declines, we should try to find another driver
+	slog.InfoContext(ctx, "Driver declined the trip, looking for another driver",
+		"trip_id", tripID,
+		"driver_id", driverID,
+	)
+
 	trip, err := c.service.GetTripByID(ctx, tripID)
 	if err != nil {
 		return err
@@ -108,7 +137,11 @@ func (c *driverConsumer) handleTripAccepted(ctx context.Context, tripID string, 
 
 	// 2. Update the trip
 	if err := c.service.UpdateTrip(ctx, tripID, "accepted", driver, nil); err != nil {
-		log.Printf("ERROR: Failed to update the trip: %v", err)
+		slog.ErrorContext(ctx, "Failed to update the trip",
+			"trip_id", tripID,
+			"driver_id", driver.GetId(),
+			"err", err,
+		)
 		return err
 	}
 
@@ -141,6 +174,10 @@ func (c *driverConsumer) handleTripAccepted(ctx context.Context, tripID string, 
 		Amount:   trip.RideFare.TotalPriceInCents,
 		Currency: "USD",
 	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to marshal payment session payload", "trip_id", tripID, "err", err)
+		return err
+	}
 
 	if err := c.rabbitmq.PublishMessage(ctx,
 		contracts.PaymentCmdCreateSession,

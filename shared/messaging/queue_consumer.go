@@ -2,7 +2,7 @@ package messaging
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 
 	"github.com/trunglq04/goride/shared/contracts"
 )
@@ -39,16 +39,25 @@ func (qc *QueueConsumer) Start() error {
 		for msg := range msgs {
 			var msgBody contracts.AmqpMessage
 			if err := json.Unmarshal(msg.Body, &msgBody); err != nil {
-				log.Println("ERROR: Failed to unmarshal message:", err)
+				slog.Error("Failed to unmarshal message",
+					"queue", qc.queueName,
+					"routing_key", msg.RoutingKey,
+					"message_id", msg.MessageId,
+					"err", err,
+				)
 				continue
 			}
 
 			userID := msgBody.OwnerID
-
 			var payload any
 			if msgBody.Data != nil {
 				if err := json.Unmarshal(msgBody.Data, &payload); err != nil {
-					log.Println("ERROR: Failed to unmarshal payload:", err)
+					slog.Error("Failed to unmarshal payload",
+						"queue", qc.queueName,
+						"routing_key", msg.RoutingKey,
+						"user_id", userID,
+						"err", err,
+					)
 					continue
 				}
 			}
@@ -62,14 +71,30 @@ func (qc *QueueConsumer) Start() error {
 				if err == ErrConnectionNotFound {
 					// The target WebSocket connection doesn't exist yet — requeue
 					// so it can be retried once the client reconnects.
-					log.Printf("connection not found for user %s, requeueing message", userID)
+					slog.Warn("Connection not found for user, requeueing message",
+						"queue", qc.queueName,
+						"routing_key", msg.RoutingKey,
+						"user_id", userID,
+					)
 				} else {
-					log.Printf("ERROR: Failed to send message to user %s: %v — discarding", userID, err)
+					slog.Error("Failed to send message to user, discarding",
+						"queue", qc.queueName,
+						"routing_key", msg.RoutingKey,
+						"user_id", userID,
+						"err", err,
+					)
 				}
 				continue
 			}
+
+			slog.Debug("Delivered message to user over WebSocket",
+				"queue", qc.queueName,
+				"routing_key", msg.RoutingKey,
+				"user_id", userID,
+			)
 		}
 	}()
 
+	slog.Info("Started queue consumer", "queue", qc.queueName)
 	return nil
 }

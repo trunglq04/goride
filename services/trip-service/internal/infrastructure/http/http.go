@@ -1,8 +1,9 @@
 package http
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
+
 	"github.com/trunglq04/goride/services/trip-service/internal/domain"
 	"github.com/trunglq04/goride/shared/types"
 
@@ -28,7 +29,7 @@ func (h *HttpHandler) HandleTripPreview(c *gin.Context) {
 
 	t, err := h.Service.GetRoute(c, &reqBody.Pickup, &reqBody.Destination, true)
 	if err != nil {
-		log.Println(err)
+		slog.ErrorContext(c.Request.Context(), "Failed to get route", "user_id", reqBody.UserID, "err", err)
 	}
 
 	c.JSON(http.StatusOK, t)

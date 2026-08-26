@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/trunglq04/goride/shared/env"
+	"github.com/trunglq04/goride/shared/logger"
 	"github.com/trunglq04/goride/shared/messaging"
 	"github.com/trunglq04/goride/shared/tracing"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
@@ -24,7 +24,9 @@ var (
 )
 
 func main() {
-	log.Println("Starting API Gateway")
+	logger.Setup("api-gateway")
+	log := logger.L()
+	log.Info("Starting API Gateway", "http_addr", httpAddr)
 
 	// Initialize Tracing
 	tracerCfg := tracing.Config{
@@ -35,26 +37,29 @@ func main() {
 
 	traceShutdown, err := tracing.InitTracer(tracerCfg)
 	if err != nil {
-		log.Fatalf("ERROR: Failed to initialize the tracer: %v", err)
+		logger.Fatal("Failed to initialize the tracer", "err", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer traceShutdown(ctx)
 	defer cancel()
 
-	log.Println("Init tracing successfully!")
+	log.Info("Tracing initialized successfully")
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(gin.Recovery())
+	router.Use(requestLogger())
 	router.Use(otelgin.Middleware(tracerCfg.ServiceName))
 	corsConfig(router)
 
 	// RabbitMQ connection
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal("Failed to connect to RabbitMQ", "err", err)
 	}
 	defer rabbitmq.Close()
+
+	log.Info("RabbitMQ connected")
 
 	trip := router.Group("/trip")
 	trip.Use()
@@ -78,7 +83,7 @@ func main() {
 	serverErrors := make(chan error, 1)
 
 	go func() {
-		log.Printf("Server listening on %s", httpAddr)
+		log.Info("HTTP server listening", "addr", httpAddr)
 		serverErrors <- server.ListenAndServe()
 	}()
 
@@ -88,23 +93,23 @@ func main() {
 	select {
 	case err := <-serverErrors:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("Server error: %v", err)
+			logger.Fatal("Server error", "err", err)
 		}
-		log.Printf("Server stopped: %v", err)
+		log.Info("Server stopped", "err", err)
 
 	case sig := <-shutdown:
-		log.Printf("Server is shutting down due to %v signal", sig)
+		log.Info("Server is shutting down due to signal", "signal", sig.String())
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		if err := server.Shutdown(ctx); err != nil {
-			log.Printf("Graceful shutdown Failed: %v", err)
+			log.Error("Graceful shutdown failed", "err", err)
 			if cerr := server.Close(); cerr != nil {
-				log.Printf("Forced server close Failed: %v", cerr)
+				log.Error("Forced server close failed", "err", cerr)
 			}
 		} else {
-			log.Printf("Server shut down gracefully")
+			log.Info("Server shut down gracefully")
 		}
 	}
 }

@@ -27,7 +27,7 @@ func (c amqp091HeadersCarrier) Get(key string) string {
 func (c amqp091HeadersCarrier) Set(key string, value string) {
 	c[key] = value
 }
- 
+
 func (c amqp091HeadersCarrier) Keys() []string {
 	keys := make([]string, 0, len(c))
 	for k := range c {
@@ -40,7 +40,8 @@ func (c amqp091HeadersCarrier) Keys() []string {
 func TracedPublisher(ctx context.Context, exchange, routingKey string, msg amqp091.Publishing, publish func(context.Context, string, string, amqp091.Publishing) error) error {
 	tracer := otel.GetTracerProvider().Tracer("rabbitmq")
 
-	ctx, span := tracer.Start(ctx, "rabbitmq.publish",
+	ctx, span := tracer.Start(ctx,
+		"rabbitmq.publish",
 		trace.WithAttributes(
 			attribute.String("messaging.destination", exchange),
 			attribute.String("messaging.routing_key", routingKey),
@@ -48,7 +49,7 @@ func TracedPublisher(ctx context.Context, exchange, routingKey string, msg amqp0
 	)
 	defer span.End()
 
-	// Try to extract and add message details to span (map[string]any if you don't know the type)
+	// Try to extract and add message details to span (map[string]any)
 	var msgBody contracts.AmqpMessage
 	if err := json.Unmarshal(msg.Body, &msgBody); err == nil {
 		if msgBody.OwnerID != "" {
@@ -80,7 +81,8 @@ func TracedConsumer(delivery amqp091.Delivery, handler func(context.Context, amq
 
 	tracer := otel.GetTracerProvider().Tracer("rabbitmq")
 
-	ctx, span := tracer.Start(ctx, "rabbitmq.consume",
+	ctx, span := tracer.Start(ctx,
+		"rabbitmq.consume",
 		trace.WithAttributes(
 			attribute.String("messaging.destination", delivery.Exchange),
 			attribute.String("messaging.routing_key", delivery.RoutingKey),

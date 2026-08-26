@@ -52,7 +52,7 @@ kind: Service
 metadata:
   name: web
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: web
   ports:

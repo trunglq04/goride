@@ -59,7 +59,7 @@ func newExporter(ctx context.Context, endpoint string) (sdktrace.SpanExporter, e
 
 func newPropagator() propagation.TextMapPropagator {
 	return propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{}, // W3C Trace Context header (Trace-Id, Span-Id, Trace-State)
+		propagation.TraceContext{}, // W3C Trace Context header (Trace-Id, Span-Id, Trace-State) (CF, nginx, Jaeger know this format)
 		propagation.Baggage{},      // W3C Baggage header
 	)
 }
@@ -77,7 +77,7 @@ func newTraceProvider(ctx context.Context, cfg Config, exporter sdktrace.SpanExp
 	}
 
 	traceProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter),
+		sdktrace.WithBatcher(exporter), // span is collected in batches and sent (not sent individually)
 		sdktrace.WithResource(res),
 	)
 

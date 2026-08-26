@@ -7,7 +7,7 @@ graph TD
     subgraph Queues
         Q1[find_available_drivers]
         Q2[notify_new_trip]
-        Q3[notify_driver_assignment]
+        Q3[notify_driver_assignment]  
         Q4[notify_driver_no_drivers_found]
         Q5[driver_cmd_trip_request]
         Q6[driver_trip_response]
