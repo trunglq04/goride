@@ -11,12 +11,19 @@ spec:
     metadata:
       labels:
         app: api-gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: api-gateway
           image: goridecr.azurecr.io/goride/api-gateway
           ports:
             - containerPort: 8081
+              name: http
+            - containerPort: 9091
+              name: metrics
           env:
             - name: GATEWAY_HTTP_ADDR
               valueFrom:

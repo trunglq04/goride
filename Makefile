@@ -13,3 +13,7 @@ generate-proto:
 .PHONY: stripe-listen
 stripe-listen:
 	stripe listen --forward-to localhost:8081/webhook/stripe
+
+.PHONY: build-push-azure
+build-push-azure:
+	infra/production/azure/build-push-images.sh 

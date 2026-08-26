@@ -11,12 +11,19 @@ spec:
     metadata:
       labels:
         app: payment-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: payment-service
           image: goridecr.azurecr.io/goride/payment-service
           ports:
             - containerPort: 9092
+              name: grpc
+            - containerPort: 9091
+              name: metrics
           resources:
             requests:
               memory: "64Mi"

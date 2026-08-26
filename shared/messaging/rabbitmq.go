@@ -9,6 +9,7 @@ import (
 
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/trunglq04/goride/shared/contracts"
+	"github.com/trunglq04/goride/shared/metrics"
 	"github.com/trunglq04/goride/shared/retry"
 	"github.com/trunglq04/goride/shared/tracing"
 )
@@ -97,7 +98,11 @@ func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, messag
 		Body:         jsonMsg,
 	}
 
-	return tracing.TracedPublisher(ctx, TripExchange, routingKey, msg, r.publish)
+	err = tracing.TracedPublisher(ctx, TripExchange, routingKey, msg, r.publish)
+	if err == nil {
+		metrics.RecordPublish(routingKey)
+	}
+	return err
 }
 
 type MessageHandler func(context.Context, amqp091.Delivery) error
@@ -165,6 +170,7 @@ func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) err
 
 					// Reject without requeue - message will go to the DLQ
 					_ = delivery.Nack(false, false)
+					metrics.RecordConsume(queueName, "error")
 					return err
 				}
 
@@ -178,6 +184,7 @@ func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) err
 					return ackErr
 				}
 
+				metrics.RecordConsume(queueName, "ok")
 				return nil
 			}); err != nil {
 				slog.Error("Error processing the message", "queue", queueName, "err", err)

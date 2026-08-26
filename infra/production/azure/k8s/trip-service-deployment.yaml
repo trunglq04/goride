@@ -11,12 +11,19 @@ spec:
     metadata:
       labels:
         app: trip-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: trip-service
           image: goridecr.azurecr.io/goride/trip-service
           ports:
             - containerPort: 9093
+              name: grpc
+            - containerPort: 9091
+              name: metrics
           resources:
             requests:
               memory: "64Mi"

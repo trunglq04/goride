@@ -12,6 +12,7 @@ import (
 	"github.com/trunglq04/goride/shared/env"
 	"github.com/trunglq04/goride/shared/logger"
 	"github.com/trunglq04/goride/shared/messaging"
+	"github.com/trunglq04/goride/shared/metrics"
 	"github.com/trunglq04/goride/shared/tracing"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
@@ -45,11 +46,16 @@ func main() {
 
 	log.Info("Tracing initialized successfully")
 
+	// Initialize Prometheus metrics
+	metrics.Init("api-gateway")
+	metrics.StartMetricsServer(":9091")
+
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(requestLogger())
 	router.Use(otelgin.Middleware(tracerCfg.ServiceName))
+	router.Use(metrics.MetricMiddleware())
 	corsConfig(router)
 
 	// RabbitMQ connection

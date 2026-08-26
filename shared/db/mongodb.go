@@ -54,8 +54,7 @@ func NewMongoClient(ctx context.Context, cfg *MongoConfig) (*mongo.Client, error
 		return nil, err
 	}
 
-	// Do not log the URI: it may contain credentials.
-	slog.Info("Successfully connected to MongoDB", "database", cfg.Database)
+	slog.Info("Successfully connected to MongoDB")
 	return client, nil
 }
 

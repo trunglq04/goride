@@ -2,6 +2,7 @@ package grpc_clients
 
 import (
 	"github.com/trunglq04/goride/shared/env"
+	"github.com/trunglq04/goride/shared/metrics"
 	pb "github.com/trunglq04/goride/shared/proto/driver"
 	"github.com/trunglq04/goride/shared/tracing"
 
@@ -20,6 +21,7 @@ func NewDriverServiceClient() (*driverServiceClient, error) {
 	dialOptions := append(
 		tracing.DialOptionsWithTracing(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		metrics.DialOptionWithMetrics(),
 	)
 	conn, err := grpc.NewClient(driverServiceURL, dialOptions...)
 	if err != nil {

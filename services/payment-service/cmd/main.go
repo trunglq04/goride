@@ -13,6 +13,7 @@ import (
 	"github.com/trunglq04/goride/shared/env"
 	"github.com/trunglq04/goride/shared/logger"
 	"github.com/trunglq04/goride/shared/messaging"
+	"github.com/trunglq04/goride/shared/metrics"
 	"github.com/trunglq04/goride/shared/tracing"
 )
 
@@ -36,6 +37,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer traceShutdown(ctx)
 	defer cancel()
+
+	// Initialize Prometheus metrics
+	metrics.Init("payment-service")
+	metrics.StartMetricsServer(":9091")
 
 	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
 

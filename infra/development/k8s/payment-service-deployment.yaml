@@ -17,6 +17,9 @@ spec:
           image: github.com/trunglq04/goride/payment-service
           ports:
             - containerPort: 9004
+              name: grpc
+            - containerPort: 9091
+              name: metrics
           resources:
             requests:
               memory: "64Mi"

@@ -2,6 +2,7 @@ package grpc_clients
 
 import (
 	"github.com/trunglq04/goride/shared/env"
+	"github.com/trunglq04/goride/shared/metrics"
 	pb "github.com/trunglq04/goride/shared/proto/trip"
 	"github.com/trunglq04/goride/shared/tracing"
 
@@ -21,6 +22,7 @@ func NewTripServiceClient() (*tripServiceClient, error) {
 	dialOptions := append(
 		tracing.DialOptionsWithTracing(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		metrics.DialOptionWithMetrics(),
 	)
 	conn, err := grpc.NewClient(tripServiceURL, dialOptions...)
 	if err != nil {

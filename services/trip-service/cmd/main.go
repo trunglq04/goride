@@ -15,6 +15,7 @@ import (
 	"github.com/trunglq04/goride/shared/env"
 	"github.com/trunglq04/goride/shared/logger"
 	"github.com/trunglq04/goride/shared/messaging"
+	"github.com/trunglq04/goride/shared/metrics"
 	"github.com/trunglq04/goride/shared/tracing"
 
 	grpcserver "google.golang.org/grpc"
@@ -40,6 +41,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	defer traceShutdown(ctx)
+
+	// Initialize Prometheus metrics
+	metrics.Init("trip-service")
+	metrics.StartMetricsServer(":9091")
 
 	// Init MongoDB
 	mongoClient, err := db.NewMongoClient(ctx, db.NewMongoDefaultConfig())
@@ -101,7 +106,10 @@ func main() {
 	// Starting the gRPC server
 	grpcServer := grpcserver.NewServer(append(
 		tracing.WithTracingInterceptors(),
-		grpcserver.ChainUnaryInterceptor(logger.GrpcUnaryServerInterceptor()),
+		grpcserver.ChainUnaryInterceptor(
+			metrics.UnaryServerInterceptor(),
+			logger.GrpcUnaryServerInterceptor(),
+		),
 		grpcserver.ChainStreamInterceptor(logger.GrpcStreamServerInterceptor()),
 	)...)
 	grpc.NewGRPCHandler(grpcServer, svc, publisher)
