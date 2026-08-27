@@ -28,14 +28,16 @@ type RabbitMQ struct {
 // QueueOptions holds optional configuration for queue declaration.
 type QueueOptions struct {
 	// Time to live of the message in milliseconds (x-message-ttl).
-	TTL int64
+	// Must be int32: RabbitMQ requires x-message-ttl as an AMQP 'long' (32-bit).
+	TTL int32
 }
 
 // QueueOption is a functional option for declareAndBindQueue.
 type QueueOption func(*QueueOptions)
 
 // WithTTL sets the message TTL (in milliseconds) on the queue.
-func WithTTL(ms int64) QueueOption {
+// The value must fit in int32 (max ~24.8 days).
+func WithTTL(ms int32) QueueOption {
 	return func(o *QueueOptions) {
 		o.TTL = ms
 	}
@@ -301,9 +303,9 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		return err
 	}
 
-	// Notification queues: 5-minute TTL so stale notifications are
+	// Notification queues: 24-hour TTL so stale notifications are
 	// dead-lettered rather than delivered to a client that has moved on.
-	const notifyTTL = 24 * 60 * 60 * 1000 // 300 000 ms
+	const notifyTTL int32 = 24 * 60 * 60 * 1000 // 86 400 000 ms
 
 	err = r.declareAndBindQueue(
 		NotifyDriverNoDriversFoundQueue,

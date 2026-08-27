@@ -25,12 +25,17 @@ spec:
             - containerPort: 9091
               name: metrics
           env:
-            - name: GATEWAY_HTTP_ADDR
+            - name: HTTP_ADDR
               valueFrom:
                 configMapKeyRef:
                   key: GATEWAY_HTTP_ADDR
                   name: app-config
-            - name: JAEGER_ENDPOINT
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  key: ENVIRONMENT
+                  name: app-config
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
               valueFrom:
                 configMapKeyRef:
                   key: JAEGER_ENDPOINT
@@ -40,6 +45,15 @@ spec:
                 secretKeyRef:
                   key: STRIPE_WEBHOOK_KEY
                   name: app-secrets
+            - name: RABBITMQ_URI
+              valueFrom:
+                secretKeyRef:
+                  key: RABBITMQ_URI
+                  name: app-secrets
+            - name: TRIP_SERVICE_URL
+              value: "trip-service:9093"
+            - name: DRIVER_SERVICE_URL
+              value: "driver-service:9092"
           resources:
             requests:
               memory: "128Mi"

@@ -44,16 +44,21 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 10
           env:
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: ENVIRONMENT
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: JAEGER_ENDPOINT
             - name: RABBITMQ_URI
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: RABBITMQ_URI
-            - name: JAEGER_ENDPOINT
-              valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: JAEGER_ENDPOINT
 
 ---
 apiVersion: v1

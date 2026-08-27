@@ -28,21 +28,35 @@ spec:
               memory: "128Mi"
               cpu: "125m"
           env:
-            - name: GATEWAY_HTTP_ADDR
+            - name: HTTP_ADDR
               valueFrom:
                 configMapKeyRef:
                   key: GATEWAY_HTTP_ADDR
                   name: app-config
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  key: ENVIRONMENT
+                  name: app-config
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  key: JAEGER_ENDPOINT
+                  name: app-config
+            - name: RABBITMQ_URI
+              valueFrom:
+                secretKeyRef:
+                  key: RABBITMQ_URI
+                  name: app-secrets
             - name: STRIPE_WEBHOOK_KEY
               valueFrom:
                 secretKeyRef:
                   key: STRIPE_WEBHOOK_KEY
                   name: app-secrets
-            - name: JAEGER_ENDPOINT
-              valueFrom:
-                configMapKeyRef:
-                  key: JAEGER_ENDPOINT
-                  name: app-config
+            - name: TRIP_SERVICE_URL
+              value: "trip-service:9093"
+            - name: DRIVER_SERVICE_URL
+              value: "driver-service:9092"
 ---
 apiVersion: v1
 kind: Service

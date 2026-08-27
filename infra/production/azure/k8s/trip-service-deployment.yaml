@@ -44,6 +44,16 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 10
           env:
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: ENVIRONMENT
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: JAEGER_ENDPOINT
             - name: MONGODB_URI
               valueFrom:
                 secretKeyRef:
@@ -54,11 +64,6 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: RABBITMQ_URI
-            - name: JAEGER_ENDPOINT
-              valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: JAEGER_ENDPOINT
 
 ---
 apiVersion: v1
