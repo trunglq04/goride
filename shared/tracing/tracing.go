@@ -17,7 +17,7 @@ import (
 type Config struct {
 	ServiceName    string
 	Environment    string
-	JaegerEndpoint string
+	ExporterEndpoint string // ex: Jaeger, Datadog, HoneyComb,...
 }
 
 func InitTracer(cfg Config) (func(context.Context) error, error) {
@@ -25,7 +25,7 @@ func InitTracer(cfg Config) (func(context.Context) error, error) {
 	defer cancel()
 
 	// 1. Initialize the otlptracegrpc exporter
-	traceExporter, err := newExporter(ctx, cfg.JaegerEndpoint) // choose OTLP tho Jaeger for export reports
+	traceExporter, err := newExporter(ctx, cfg.ExporterEndpoint) // choose OTLP to export reports
 	if err != nil {
 		return nil, err
 	}

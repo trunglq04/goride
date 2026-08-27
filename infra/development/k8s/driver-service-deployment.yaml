@@ -63,3 +63,6 @@ spec:
     - port: 9092
       name: grpc
       targetPort: 9092
+    - port: 9091
+      name: metrics
+      targetPort: 9091

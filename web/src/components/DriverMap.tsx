@@ -13,6 +13,7 @@ import { RoutingControl } from "./RoutingControl";
 import { DriverCard } from "./DriverCard";
 import { TripEvents } from "../contracts";
 import { uuid } from "@/utils/uuid";
+import { VITE_CARTO_API_KEY } from "@/constants";
 
 const START_LOCATION: Coordinate = {
   latitude: 37.7749,
@@ -163,7 +164,7 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
           ref={mapRef}
         >
           <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            url={`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${VITE_CARTO_API_KEY}`}
             attribution="&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors &copy; <a href='https://carto.com/'>CARTO</a>"
           />
 

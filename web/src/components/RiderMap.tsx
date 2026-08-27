@@ -22,7 +22,7 @@ import {
   HTTPTripStartResponse,
 } from "../types";
 import { RoutingControl } from "./RoutingControl";
-import { API_URL } from "../constants";
+import { API_URL, VITE_CARTO_API_KEY } from "../constants";
 import { RiderTripOverview } from "./RiderTripOverview";
 import {
   BackendEndpoints,
@@ -133,7 +133,7 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
       },
       body: JSON.stringify(payload),
     });
-    
+
     if (!response.ok) {
       console.error("Preview trip failed:", await response.text());
       throw new Error("Failed to preview trip");
@@ -209,7 +209,7 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
           ref={mapRef}
         >
           <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            url={`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${VITE_CARTO_API_KEY}`}
             attribution="&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors &copy; <a href='https://carto.com/'>CARTO</a>"
           />
           <Marker

@@ -33,7 +33,7 @@ func main() {
 	tracerCfg := tracing.Config{
 		ServiceName:    "api-gateway",
 		Environment:    env.GetString("ENVIRONMENT", "developement"),
-		JaegerEndpoint: env.GetString("JAEGER_ENDPOINT", "jaeger:4317"),
+		ExporterEndpoint: env.GetString("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317"),
 	}
 
 	traceShutdown, err := tracing.InitTracer(tracerCfg)
@@ -48,7 +48,7 @@ func main() {
 
 	// Initialize Prometheus metrics
 	metrics.Init("api-gateway")
-	metrics.StartMetricsServer(":9091")
+	metrics.StartMetricsServer("api-gateway", ":9091")
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
@@ -68,7 +68,6 @@ func main() {
 	log.Info("RabbitMQ connected")
 
 	trip := router.Group("/trip")
-	trip.Use()
 	trip.POST("/preview", handleTripPreview)
 	trip.POST("/start", handleTripStart)
 

@@ -29,9 +29,9 @@ func main() {
 
 	// Initialize Tracing
 	tracerCfg := tracing.Config{
-		ServiceName:    "trip-service",
-		Environment:    env.GetString("ENVIRONMENT", "developement"),
-		JaegerEndpoint: env.GetString("JAEGER_ENDPOINT", "http://jaeger:4318"),
+		ServiceName:      "trip-service",
+		Environment:      env.GetString("ENVIRONMENT", "developement"),
+		ExporterEndpoint: env.GetString("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317"),
 	}
 
 	traceShutdown, err := tracing.InitTracer(tracerCfg)
@@ -44,7 +44,7 @@ func main() {
 
 	// Initialize Prometheus metrics
 	metrics.Init("trip-service")
-	metrics.StartMetricsServer(":9091")
+	metrics.StartMetricsServer("trip", ":9091")
 
 	// Init MongoDB
 	mongoClient, err := db.NewMongoClient(ctx, db.NewMongoDefaultConfig())

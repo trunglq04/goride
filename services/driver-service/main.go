@@ -24,9 +24,9 @@ func main() {
 
 	// Initialize Tracing
 	tracerCfg := tracing.Config{
-		ServiceName:    "driver-service",
-		Environment:    env.GetString("ENVIRONMENT", "developement"),
-		JaegerEndpoint: env.GetString("JAEGER_ENDPOINT", "jaeger:14268/api/traces"),
+		ServiceName:      "driver-service",
+		Environment:      env.GetString("ENVIRONMENT", "developement"),
+		ExporterEndpoint: env.GetString("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317"),
 	}
 
 	traceShutdown, err := tracing.InitTracer(tracerCfg)
@@ -39,7 +39,7 @@ func main() {
 
 	// Initialize Prometheus metrics
 	metrics.Init("driver-service")
-	metrics.StartMetricsServer(":9091")
+	metrics.StartMetricsServer("driver", ":9091")
 
 	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
 

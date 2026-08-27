@@ -13,7 +13,7 @@ spec:
         app: api-gateway
     spec:
       containers:
-        - name: api-gateway
+        - name: api-api-gateway
           image: github.com/trunglq04/goride/api-gateway
           ports:
             - containerPort: 8081
@@ -52,6 +52,10 @@ spec:
   type: LoadBalancer
   ports:
     - port: 8081
+      name: http
       targetPort: 8081
+    - port: 9091
+      name: metrics
+      targetPort: 9091
   selector:
     app: api-gateway

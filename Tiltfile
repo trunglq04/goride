@@ -151,6 +151,14 @@ k8s_resource('web', port_forwards=3000, labels="frontend")
 
 ### End of Web Frontend ###
 
+### OTel Collector ###
+
+k8s_yaml('./infra/development/k8s/otel-collector-config.yaml')
+k8s_yaml('./infra/development/k8s/otel-collector.yaml')
+k8s_resource('otel-collector', port_forwards=['4317:4317', '4318:4318'], labels="tooling")
+
+### End of OTel Collector ###
+
 ### Jaeger ###
 
 k8s_yaml('./infra/development/k8s/jaeger.yaml')

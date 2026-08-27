@@ -19,7 +19,7 @@ type tripServiceClient struct {
 func NewTripServiceClient() (*tripServiceClient, error) {
 	tripServiceURL := env.GetString("TRIP_SERVICE_URL", "trip-service:9093")
 
-	dialOptions := append(
+	var dialOptions []grpc.DialOption = append(
 		tracing.DialOptionsWithTracing(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		metrics.DialOptionWithMetrics(),
