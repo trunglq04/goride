@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+data:
+  # RabbitMQ reads all *.conf files from /etc/rabbitmq/conf.d/
+  # management.path_prefix tells the management plugin it is mounted
+  # at /rabbitmq behind the nginx ingress (no path rewriting needed).
+  management.conf: |
+    management.path_prefix = /rabbitmq
+    loopback_users = none
