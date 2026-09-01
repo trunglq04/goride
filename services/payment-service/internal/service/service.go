@@ -13,11 +13,13 @@ import (
 
 type paymentService struct {
 	paymentProcessor domain.PaymentProcessor
+	publisher        domain.PaymentEventPublisher
 }
 
-func NewPaymentService(paymentProcessor domain.PaymentProcessor) domain.Service {
+func NewPaymentService(paymentProcessor domain.PaymentProcessor, publisher domain.PaymentEventPublisher) domain.Service {
 	return &paymentService{
 		paymentProcessor: paymentProcessor,
+		publisher:        publisher,
 	}
 }
 
@@ -43,6 +45,10 @@ func (s *paymentService) CreatePaymentSession(ctx context.Context, tripID string
 		Currency:        currency,
 		StripeSessionID: sessionID,
 		CreatedAt:       time.Now(),
+	}
+
+	if err := s.publisher.PublishSessionCreated(ctx, tripID, sessionID, userID, float64(amount)/100.0, currency); err != nil {
+		return nil, fmt.Errorf("failed to publish payment session created event: %w", err)
 	}
 
 	return paymentIntent, nil

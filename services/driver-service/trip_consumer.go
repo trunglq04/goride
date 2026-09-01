@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"math/rand"
 
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/trunglq04/goride/shared/contracts"
@@ -77,7 +76,11 @@ func (c *TripConsumer) handleTripEvents(ctx context.Context, msg amqp091.Deliver
 
 	switch msg.RoutingKey {
 	case contracts.TripEventCreated, contracts.TripEventDriverNotInterested:
-		if err := c.handleFindAndNotifyDrivers(ctx, payload); err != nil {
+		if err := c.service.HandleTripCreated(ctx, payload); err != nil {
+			return err
+		}
+	case contracts.TripEventCanceled:
+		if err := c.service.HandleTripCanceled(ctx, payload); err != nil {
 			return err
 		}
 	default:
@@ -117,79 +120,6 @@ func (c *TripConsumer) handleDriverLocationUpdate(ctx context.Context, msg amqp0
 		)
 		return err
 	}
-
-	return nil
-}
-
-func (c *TripConsumer) handleFindAndNotifyDrivers(ctx context.Context, payload messaging.TripEventData) error {
-	packageSlug := payload.Trip.GetSelectedFare().GetPackageSlug()
-
-	suitableIDs := c.service.FindAvailableDrivers(
-		packageSlug,
-		payload.ExcludeDriverIDs,
-	)
-
-	slog.InfoContext(ctx, "Searching for suitable drivers",
-		"package_slug", packageSlug,
-		"found", len(suitableIDs),
-		"excluded_drivers", len(payload.ExcludeDriverIDs),
-	)
-
-	if len(suitableIDs) == 0 {
-		slog.WarnContext(ctx, "No suitable drivers found, notifying rider",
-			"package_slug", packageSlug,
-			"trip_id", payload.Trip.GetId(),
-		)
-		// Notify the rider that no drivers are available
-		if err := c.rabbitmq.PublishMessage(ctx,
-			contracts.TripEventNoDriversFound,
-			contracts.AmqpMessage{
-				OwnerID: payload.Trip.UserID,
-			}); err != nil {
-			slog.ErrorContext(ctx, "Failed to publish no-drivers-found event",
-				"routing_key", contracts.TripEventNoDriversFound,
-				"trip_id", payload.Trip.GetId(),
-				"err", err,
-			)
-			return err
-		}
-
-		return nil
-	}
-
-	randIndex := rand.Intn(len(suitableIDs))
-	suitableDriverID := suitableIDs[randIndex]
-
-	marshalledEvent, err := json.Marshal(payload)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to marshal trip event",
-			"trip_id", payload.Trip.GetId(),
-			"err", err,
-		)
-		return err
-	}
-
-	// Ask drivers if they confirm the trip request
-	if err := c.rabbitmq.PublishMessage(ctx,
-		contracts.DriverCmdTripRequest,
-		contracts.AmqpMessage{
-			OwnerID: suitableDriverID,
-			Data:    marshalledEvent,
-		}); err != nil {
-		slog.ErrorContext(ctx, "Failed to publish trip request to driver",
-			"routing_key", contracts.DriverCmdTripRequest,
-			"driver_id", suitableDriverID,
-			"trip_id", payload.Trip.GetId(),
-			"err", err,
-		)
-		return err
-	}
-
-	slog.InfoContext(ctx, "Trip request sent to driver",
-		"driver_id", suitableDriverID,
-		"trip_id", payload.Trip.GetId(),
-		"package_slug", packageSlug,
-	)
 
 	return nil
 }

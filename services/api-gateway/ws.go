@@ -211,7 +211,6 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 		// Handle the different message types
 		switch driverMsg.Type {
 		case contracts.DriverCmdLocation:
-			// TODO: Handle driver's location update in the future
 			if err := rb.PublishMessage(c,
 				driverMsg.Type,
 				contracts.AmqpMessage{

@@ -275,6 +275,7 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		[]string{ // routing keys
 			contracts.TripEventCreated,
 			contracts.TripEventDriverNotInterested,
+			contracts.TripEventCanceled,
 		}, // message types
 		TripExchange, // exchange
 	)
@@ -284,7 +285,10 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 
 	err = r.declareAndBindQueue(
 		DriverCmdTripRequestQueue,
-		[]string{contracts.DriverCmdTripRequest},
+		[]string{
+			contracts.DriverCmdTripRequest,
+			contracts.DriverCmdTripCanceled,
+		},
 		TripExchange,
 	)
 	if err != nil {

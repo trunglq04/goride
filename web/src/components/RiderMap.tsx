@@ -189,7 +189,24 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
   };
   console.log("Trip Status:", tripStatus);
 
-  const handleCancelTrip = () => {
+  const handleCancelTrip = async () => {
+    if (trip) {
+      try {
+        await fetch(`http://localhost:8081${BackendEndpoints.CANCEL_TRIP}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            tripID: trip.tripID,
+            userID: userID,
+            reason: "User requested cancellation",
+          }),
+        });
+      } catch (err) {
+        console.error("Failed to cancel trip on backend", err);
+      }
+    }
     setTrip(null);
     setDestination(null);
     resetTripStatus();

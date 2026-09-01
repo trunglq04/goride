@@ -55,14 +55,26 @@ func main() {
 
 	mongodb := db.GetDatabase(mongoClient, db.NewMongoDefaultConfig())
 
+	// Publisher must be initialized before Service so we can inject it
 	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
+	
+	// RabbitMQ connection
+	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
+	if err != nil {
+		logger.Fatal("Failed to connect to RabbitMQ", "err", err)
+	}
+	defer rabbitmq.Close()
+	log.Info("RabbitMQ connected")
+
+	// Start trip publisher
+	publisher := events.NewTripEventPublisher(rabbitmq)
 
 	mongoDBRepo := repository.NewMongoRepository(mongodb)
 	if err := mongoDBRepo.EnsureIndexes(ctx); err != nil {
 		logger.Fatal("Failed to ensure indexes", "err", err)
 	}
 
-	svc := service.NewService(mongoDBRepo)
+	svc := service.NewService(mongoDBRepo, publisher)
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)
@@ -76,16 +88,7 @@ func main() {
 		logger.Fatal("Failed to listen", "addr", GrpcAddr, "err", err)
 	}
 
-	// RabbitMQ connection
-	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
-	if err != nil {
-		logger.Fatal("Failed to connect to RabbitMQ", "err", err)
-	}
-	defer rabbitmq.Close()
-	log.Info("RabbitMQ connected")
 
-	// Start trip publisher
-	publisher := events.NewTripEventPublisher(rabbitmq)
 
 	// Start driver consumer
 	driverConsumer := events.NewDriverConsumer(rabbitmq, svc)
@@ -112,7 +115,7 @@ func main() {
 		),
 		grpcserver.ChainStreamInterceptor(logger.GrpcStreamServerInterceptor()),
 	)...)
-	grpc.NewGRPCHandler(grpcServer, svc, publisher)
+	grpc.NewGRPCHandler(grpcServer, svc)
 
 	log.Info("Starting gRPC server Trip service", "addr", lis.Addr().String())
 

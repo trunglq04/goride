@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -45,6 +46,32 @@ func (r *mongoRepository) CreateTrip(ctx context.Context, trip *domain.TripModel
 	trip.ID = result.InsertedID.(primitive.ObjectID)
 
 	return trip, nil
+}
+
+func (r *mongoRepository) CancelTrip(ctx context.Context, userID, tripID, reason string) error {
+	_id, err := primitive.ObjectIDFromHex(tripID)
+	if err != nil {
+		return err // invalid ID
+	}
+
+	filter := bson.M{
+		"_id":    _id,
+		"userID": userID,
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"status": "CANCELED",
+		},
+	}
+	result, err := r.db.Collection(db.TripsCollection).UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return errors.New("trip not found or unauthorized to cancel")
+	}
+	return nil
 }
 
 func (r *mongoRepository) GetTripByID(ctx context.Context, id string) (*domain.TripModel, error) {

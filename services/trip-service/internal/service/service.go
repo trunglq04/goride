@@ -3,12 +3,15 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/trunglq04/goride/services/trip-service/internal/domain"
 	tripTypes "github.com/trunglq04/goride/services/trip-service/pkg/types"
+	"github.com/trunglq04/goride/shared/logger"
+	"github.com/trunglq04/goride/shared/metrics"
 	pbd "github.com/trunglq04/goride/shared/proto/driver"
 	"github.com/trunglq04/goride/shared/proto/trip"
 	types "github.com/trunglq04/goride/shared/types"
@@ -17,12 +20,14 @@ import (
 )
 
 type service struct {
-	repo domain.TripRepository
+	repo      domain.TripRepository
+	publisher domain.TripEventPublisher
 }
 
-func NewService(repo domain.TripRepository) *service {
+func NewService(repo domain.TripRepository, pub domain.TripEventPublisher) *service {
 	return &service{
-		repo: repo,
+		repo:      repo,
+		publisher: pub,
 	}
 }
 
@@ -36,7 +41,48 @@ func (s *service) CreateTrip(ctx context.Context, fare *domain.RideFareModel) (*
 		ExcludedDriverIDs: []string{},
 	}
 
-	return s.repo.CreateTrip(ctx, t)
+	model, err := s.repo.CreateTrip(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+
+	metrics.RecordTripEvent("created", "")
+	
+	if err := s.publisher.PublishTripCreated(ctx, model); err != nil {
+		logger.L().ErrorContext(ctx, "Failed to publish trip created event", "err", err)
+	}
+
+	return model, nil
+}
+
+func (s *service) CancelTrip(ctx context.Context, userID, tripID, reason string) error {
+	trip, err := s.repo.GetTripByID(ctx, tripID)
+	if err != nil {
+		return err
+	}
+
+	if trip.Status == "COMPLETED" || trip.Status == "CANCELED" {
+		return errors.New("cannot cancel a completed or already canceled trip")
+	}
+
+	err = s.repo.CancelTrip(ctx, userID, tripID, reason)
+	if err != nil {
+		return err
+	}
+
+	metrics.RecordTripEvent("canceled", reason)
+
+	if trip.Status == "STARTED" || trip.Status == "DRIVER_ACCEPTED" {
+		metrics.DecActiveTrip("unknown")
+	}
+	
+	// Update the trip status to reflect the cancellation before publishing
+	trip.Status = "CANCELED"
+	if err := s.publisher.PublishTripCanceled(ctx, trip); err != nil {
+		logger.L().ErrorContext(ctx, "Failed to publish trip canceled event", "err", err)
+	}
+
+	return nil
 }
 
 func (s *service) GetRoute(ctx context.Context, pickup, destination *types.Coordinate, useOSMApi bool) (*tripTypes.OsrmApiResponse, error) {

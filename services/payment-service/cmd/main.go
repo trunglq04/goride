@@ -67,9 +67,6 @@ func main() {
 	// Stripe processor
 	paymentProcessor := stripe.NewStripeClient(stripeCfg)
 
-	// Service
-	svc := service.NewPaymentService(paymentProcessor)
-
 	// RabbitMQ connection
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
 	if err != nil {
@@ -78,6 +75,12 @@ func main() {
 	defer rabbitmq.Close()
 
 	log.Info("RabbitMQ connected")
+
+	// Event publisher
+	publisher := events.NewPaymentEventPublisher(rabbitmq)
+
+	// Service
+	svc := service.NewPaymentService(paymentProcessor, publisher)
 
 	// Trip Consumer
 	tripConsumer := events.NewTripConsumer(rabbitmq, svc)

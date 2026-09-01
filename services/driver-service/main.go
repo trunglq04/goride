@@ -56,7 +56,7 @@ func main() {
 		logger.Fatal("Failed to listen", "addr", GrpcAddr, "err", err)
 	}
 
-	svc := NewService()
+
 
 	// RabbitMQ connection
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
@@ -66,6 +66,9 @@ func main() {
 	defer rabbitmq.Close()
 
 	log.Info("RabbitMQ connected")
+
+	publisher := NewEventPublisher(rabbitmq)
+	svc := NewService(publisher)
 
 	// Starting the gRPC server
 	grpcServer := grpcserver.NewServer(append(

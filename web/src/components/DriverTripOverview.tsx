@@ -7,10 +7,24 @@ interface DriverTripOverviewProps {
   trip?: Trip | null,
   status?: TripEvents | null,
   onAcceptTrip?: () => void,
-  onDeclineTrip?: () => void
+  onDeclineTrip?: () => void,
+  onDismiss?: () => void
 }
 
-export const DriverTripOverview = ({ trip, status, onAcceptTrip, onDeclineTrip }: DriverTripOverviewProps) => {
+export const DriverTripOverview = ({ trip, status, onAcceptTrip, onDeclineTrip, onDismiss }: DriverTripOverviewProps) => {
+  if (status === TripEvents.DriverTripCanceled) {
+    return (
+      <TripOverviewCard
+        title="Trip Canceled"
+        description="The rider has canceled this trip."
+      >
+        <div className="flex flex-col gap-2">
+          <Button onClick={onDismiss}>Dismiss</Button>
+        </div>
+      </TripOverviewCard>
+    )
+  }
+
   if (!trip) {
     return (
       <TripOverviewCard

@@ -59,6 +59,45 @@ func handleTripStart(c *gin.Context) {
 
 }
 
+func handleTripCancel(c *gin.Context) {
+	ctx := c.Request.Context()
+	log := logger.L()
+
+	var reqBody cancelTripRequest
+	if err := c.ShouldBindBodyWithJSON(&reqBody); err != nil {
+		log.WarnContext(ctx, "Failed to parse trip cancel request body", "err", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse JSON data"})
+		return
+	}
+
+	tripService, err := grpc_clients.NewTripServiceClient()
+	if err != nil {
+		log.ErrorContext(ctx, "Failed to create trip service client", "err", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to reach trip service"})
+		return
+	}
+	defer tripService.Close()
+
+	cancelRes, err := tripService.Client.CancelTrip(ctx, reqBody.toProto())
+	if err != nil {
+		log.ErrorContext(ctx, "Failed to call trip cancel",
+			"user_id", reqBody.UserID,
+			"trip_id", reqBody.TripID,
+			"err", err,
+		)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to call trip cancel"})
+		return
+	}
+
+	log.InfoContext(ctx, "Trip canceled via HTTP",
+		"trip_id", cancelRes.TripID,
+		"user_id", reqBody.UserID,
+	)
+
+	response := contracts.APIResponse{Data: cancelRes}
+	c.JSON(http.StatusOK, response)
+}
+
 func handleTripPreview(c *gin.Context) {
 	ctx := c.Request.Context()
 	log := logger.L()

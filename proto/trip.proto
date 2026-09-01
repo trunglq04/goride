@@ -7,6 +7,18 @@ option go_package = "shared/proto/trip;trip";
 service TripService {
   rpc PreviewTrip(PreviewTripRequest) returns (PreviewTripResponse);
   rpc CreateTrip(CreateTripRequest) returns (CreateTripResponse);
+  rpc CancelTrip(CancelTripRequest) returns (CancelTripResponse);
+}
+
+message CancelTripResponse {
+  string tripID = 1;
+  string status = 2;
+}
+
+message CancelTripRequest {
+  string userID = 1;
+  string tripID = 2;
+  string reason = 3;
 }
 
 message PreviewTripRequest {

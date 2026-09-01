@@ -214,6 +214,7 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
             status={tripStatus}
             onAcceptTrip={handleAcceptTrip}
             onDeclineTrip={handleDeclineTrip}
+            onDismiss={resetTripStatus}
           />
         </div>
       </div>

@@ -31,8 +31,14 @@ func (t *TripModel) ToProto() *pb.Trip {
 	}
 }
 
+type TripEventPublisher interface {
+	PublishTripCreated(ctx context.Context, trip *TripModel) error
+	PublishTripCanceled(ctx context.Context, trip *TripModel) error
+}
+
 type TripRepository interface {
 	CreateTrip(ctx context.Context, trip *TripModel) (*TripModel, error)
+	CancelTrip(ctx context.Context, userID, tripID, reason string) error
 	SaveRideFare(ctx context.Context, fare *RideFareModel) error
 	GetRideFareByID(ctx context.Context, id string) (*RideFareModel, error)
 	GetTripByID(ctx context.Context, id string) (*TripModel, error)
@@ -41,6 +47,7 @@ type TripRepository interface {
 
 type TripService interface {
 	CreateTrip(ctx context.Context, fare *RideFareModel) (*TripModel, error)
+	CancelTrip(ctx context.Context, userID, tripID, reason string) error
 	GetRoute(ctx context.Context, pickup, destination *types.Coordinate, useOSMApi bool) (*tripTypes.OsrmApiResponse, error)
 	EstimatePackagesPriceWithRoute(route *tripTypes.OsrmApiResponse) []*RideFareModel // price for each package slugs
 	GenerateTripFares(ctx context.Context, fares []*RideFareModel, userID string, route *tripTypes.OsrmApiResponse) ([]*RideFareModel, error)

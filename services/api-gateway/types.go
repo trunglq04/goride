@@ -36,3 +36,17 @@ func (c *startTripRequest) toProto() *pb.CreateTripRequest {
 		UserID:     c.UserID,
 	}
 }
+
+type cancelTripRequest struct {
+	TripID string `json:"tripID"`
+	UserID string `json:"userID"`
+	Reason string `json:"reason"`
+}
+
+func (c *cancelTripRequest) toProto() *pb.CancelTripRequest {
+	return &pb.CancelTripRequest{
+		TripID: c.TripID,
+		UserID: c.UserID,
+		Reason: c.Reason,
+	}
+}

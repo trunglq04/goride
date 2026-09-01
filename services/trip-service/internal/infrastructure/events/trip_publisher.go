@@ -21,7 +21,8 @@ func NewTripEventPublisher(rabbitmq *messaging.RabbitMQ) *TripEventPublisher {
 
 func (p *TripEventPublisher) PublishTripCreated(ctx context.Context, trip *domain.TripModel) error {
 	msg := messaging.TripEventData{
-		Trip: trip.ToProto(),
+		Trip:             trip.ToProto(),
+		ExcludeDriverIDs: trip.ExcludedDriverIDs,
 	}
 
 	tripEventJSON, err := json.Marshal(msg)
@@ -31,6 +32,25 @@ func (p *TripEventPublisher) PublishTripCreated(ctx context.Context, trip *domai
 
 	return p.rabbitmq.PublishMessage(ctx,
 		contracts.TripEventCreated,
+		contracts.AmqpMessage{
+			OwnerID: trip.UserID,
+			Data:    tripEventJSON,
+		})
+}
+
+func (p *TripEventPublisher) PublishTripCanceled(ctx context.Context, trip *domain.TripModel) error {
+	msg := messaging.TripEventData{
+		Trip:             trip.ToProto(),
+		ExcludeDriverIDs: trip.ExcludedDriverIDs,
+	}
+
+	tripEventJSON, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	return p.rabbitmq.PublishMessage(ctx,
+		contracts.TripEventCanceled,
 		contracts.AmqpMessage{
 			OwnerID: trip.UserID,
 			Data:    tripEventJSON,

@@ -36,6 +36,14 @@ var (
 
 	// AMQPMessagesConsumed counts messages consumed from RabbitMQ, labelled by outcome.
 	AMQPMessagesConsumed *prometheus.CounterVec
+
+	// --- Business Metrics
+	// ActiveDrivers count number of online drivers (Gauge: can go up/down)
+	ActiveDrivers *prometheus.GaugeVec
+	// ActiveTrips count number of on-going trips (Gauge: can go up/down)
+	ActiveTrips *prometheus.GaugeVec
+	// TripEvents sum number of trip events like "created", "completed", "canceled" (Gauge: can go up/down)
+	TripEvents *prometheus.GaugeVec
 )
 
 // Init registers all metrics for the given service name.
@@ -118,6 +126,33 @@ func Init(serviceName string) {
 		[]string{"method"},
 	)
 
+	ActiveDrivers = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name:        "business_active_drivers",
+			Help:        "Current number of drivers online.",
+			ConstLabels: labels,
+		},
+		[]string{"city", "vehicle_type"},
+	)
+
+	ActiveTrips = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name:        "business_active_trips",
+			Help:        "Current number of ongoing trips.",
+			ConstLabels: labels,
+		},
+		[]string{"city"},
+	)
+
+	TripEvents = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name:        "business_trip_events_total",
+			Help:        "Total number of trip events (created, completed, canceled)",
+			ConstLabels: labels,
+		},
+		[]string{"status", "cancel_reason"},
+	)
+
 	slog.Info("Prometheus metrics initialized", "service", serviceName)
 }
 
@@ -148,5 +183,40 @@ func RecordPublish(routingKey string) {
 func RecordConsume(queue, status string) {
 	if AMQPMessagesConsumed != nil {
 		AMQPMessagesConsumed.WithLabelValues(queue, status).Inc()
+	}
+}
+
+// Call when driver app online
+func IncActiveDriver(city, vehicleType string) {
+	if ActiveDrivers != nil {
+		ActiveDrivers.WithLabelValues(city, vehicleType).Inc()
+	}
+}
+
+// Call when driver app offline
+func DecActiveDriver(city, vehicleType string) {
+	if ActiveDrivers != nil {
+		ActiveDrivers.WithLabelValues(city, vehicleType).Dec()
+	}
+}
+
+// Call when the trip started (customer picked up)
+func IncActiveTrip(city string) {
+	if ActiveTrips != nil {
+		ActiveTrips.WithLabelValues(city).Inc()
+	}
+}
+
+// Call when the trip ended (succeed or canceled)
+func DecActiveTrip(city string) {
+	if ActiveTrips != nil {
+		ActiveTrips.WithLabelValues(city).Dec()
+	}
+}
+
+// Call when trips state changed
+func RecordTripEvent(status, cancelReason string) {
+	if TripEvents != nil {
+		TripEvents.WithLabelValues(status, cancelReason).Inc()
 	}
 }

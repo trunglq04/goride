@@ -100,41 +100,5 @@ func (c *TripConsumer) handleTripAccepted(ctx context.Context, payload messaging
 		"session_id", paymentSession.StripeSessionID,
 	)
 
-	// Publish payment session created event
-	paymentPayload := messaging.PaymentEventSessionCreatedData{
-		TripID:    payload.TripID,
-		SessionID: paymentSession.StripeSessionID,
-		Amount:    float64(paymentSession.Amount) / 100.0, // Convert from cents to dollars
-		Currency:  paymentSession.Currency,
-	}
-
-	payloadBytes, err := json.Marshal(paymentPayload)
-	if err != nil {
-		log.ErrorContext(ctx, "Failed to marshal payment session created event",
-			"trip_id", payload.TripID,
-			"err", err,
-		)
-		return err
-	}
-
-	if err := c.rabbitmq.PublishMessage(ctx,
-		contracts.PaymentEventSessionCreated,
-		contracts.AmqpMessage{
-			OwnerID: payload.UserID,
-			Data:    payloadBytes,
-		},
-	); err != nil {
-		log.ErrorContext(ctx, "Failed to publish payment session created event",
-			"routing_key", contracts.PaymentEventSessionCreated,
-			"trip_id", payload.TripID,
-			"err", err,
-		)
-		return err
-	}
-
-	log.InfoContext(ctx, "Published payment session created event",
-		"routing_key", contracts.PaymentEventSessionCreated,
-		"trip_id", payload.TripID,
-	)
 	return nil
 }

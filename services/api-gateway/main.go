@@ -70,6 +70,7 @@ func main() {
 	trip := router.Group("/trip")
 	trip.POST("/preview", handleTripPreview)
 	trip.POST("/start", handleTripStart)
+	trip.POST("/cancel", handleTripCancel)
 
 	// WebSocket
 	ws := router.Group("/ws")

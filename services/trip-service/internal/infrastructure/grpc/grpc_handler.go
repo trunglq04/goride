@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/trunglq04/goride/services/trip-service/internal/domain"
-	"github.com/trunglq04/goride/services/trip-service/internal/infrastructure/events"
 	"github.com/trunglq04/goride/shared/logger"
 	pb "github.com/trunglq04/goride/shared/proto/trip"
 	types "github.com/trunglq04/goride/shared/types"
@@ -18,17 +17,39 @@ import (
 type gRPCHandler struct {
 	pb.UnimplementedTripServiceServer
 
-	service   domain.TripService
-	publisher *events.TripEventPublisher
+	service domain.TripService
 }
 
-func NewGRPCHandler(server *grpc.Server, service domain.TripService, publisher *events.TripEventPublisher) {
+func NewGRPCHandler(server *grpc.Server, service domain.TripService) {
 	handler := &gRPCHandler{
-		service:   service,
-		publisher: publisher,
+		service: service,
 	}
 
 	pb.RegisterTripServiceServer(server, handler)
+}
+
+func (h *gRPCHandler) CancelTrip(ctx context.Context, req *pb.CancelTripRequest) (*pb.CancelTripResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	err := h.service.CancelTrip(ctx, req.UserID, req.TripID, req.Reason)
+	if err != nil {
+		logger.L().ErrorContext(ctx, "Failed to cancel trip",
+			"user_id", req.UserID,
+			"trip_id", req.TripID,
+			"err", err,
+		)
+		return nil, status.Errorf(codes.Internal, "Failed to cancel trip: %v", err)
+	}
+
+	logger.L().InfoContext(ctx, "Trip canceled",
+		"user_id", req.UserID,
+		"trip_id", req.TripID,
+	)
+	return &pb.CancelTripResponse{
+		TripID: req.TripID,
+		Status: "CANCELED",
+	}, nil
 }
 
 func (h *gRPCHandler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest) (*pb.CreateTripResponse, error) {
@@ -51,19 +72,6 @@ func (h *gRPCHandler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest)
 		)
 		return nil, status.Errorf(codes.Internal, "Failed to create trip: %v", err)
 	}
-	// 3. Initialize an empty driver to the trip.
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	if err = h.publisher.PublishTripCreated(ctx, trip); err != nil {
-		logger.L().ErrorContext(ctx, "Failed to publish trip created event",
-			"trip_id", trip.ID.Hex(),
-			"user_id", userID,
-			"err", err,
-		)
-		return nil, status.Errorf(codes.Internal, "Failed to publish the trip created event: %v", err)
-	}
-
 	logger.L().InfoContext(ctx, "Trip created",
 		"trip_id", trip.ID.Hex(),
 		"user_id", userID,

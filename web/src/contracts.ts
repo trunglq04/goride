@@ -5,6 +5,7 @@ import { Coordinate, Driver, Route, RouteFare, Trip } from "./types";
 export enum BackendEndpoints {
   PREVIEW_TRIP = "/trip/preview",
   START_TRIP = "/trip/start",
+  CANCEL_TRIP = "/trip/cancel",
   WS_DRIVERS = "/drivers",
   WS_RIDERS = "/riders",
 }
@@ -19,6 +20,7 @@ export enum TripEvents {
   DriverTripRequest = "driver.cmd.trip_request",
   DriverTripAccept = "driver.cmd.trip_accept",
   DriverTripDecline = "driver.cmd.trip_decline",
+  DriverTripCanceled = "driver.cmd.trip_canceled",
   DriverRegister = "driver.cmd.register",
   PaymentSessionCreated = "payment.event.session_created",
 }
@@ -29,6 +31,7 @@ export type ServerWsMessage =
   | DriverAssignedRequest
   | DriverLocationRequest
   | DriverTripRequest
+  | DriverTripCanceledRequest
   | DriverRegisterRequest
   | TripCreatedRequest
   | NoDriversFoundRequest;
@@ -61,6 +64,11 @@ interface DriverRegisterRequest {
 interface DriverTripRequest {
   type: TripEvents.DriverTripRequest;
   data: Trip;
+}
+
+interface DriverTripCanceledRequest {
+  type: TripEvents.DriverTripCanceled;
+  data: Trip; // The backend payload contains trip
 }
 
 export interface PaymentEventSessionCreatedData {
