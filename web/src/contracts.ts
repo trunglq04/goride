@@ -8,6 +8,13 @@ export enum BackendEndpoints {
   CANCEL_TRIP = "/trip/cancel",
   WS_DRIVERS = "/drivers",
   WS_RIDERS = "/riders",
+  AUTH_REGISTER = "/auth/register",
+  AUTH_LOGIN = "/auth/login",
+  AUTH_VERIFY_OTP = "/auth/verify-otp",
+  AUTH_RESEND_OTP = "/auth/resend-otp",
+  AUTH_REFRESH = "/auth/refresh",
+  AUTH_LOGOUT = "/auth/logout",
+  AUTH_ME = "/auth/me",
 }
 
 export enum TripEvents {

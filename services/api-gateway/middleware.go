@@ -17,7 +17,7 @@ type client struct {
 }
 
 type RateLimiter struct {
-	mu     sync.Mutex
+	mu      sync.Mutex
 	clients map[string]*client
 }
 
@@ -25,7 +25,7 @@ type RateLimiter struct {
 // to auth endpoints (login, register, OTP). Limits to 5 req/s with a burst of 10.
 func authRateLimiter() gin.HandlerFunc {
 	rl := &RateLimiter{
-		mu:     sync.Mutex{},
+		mu:      sync.Mutex{},
 		clients: make(map[string]*client),
 	}
 
@@ -109,10 +109,10 @@ func requestLogger() gin.HandlerFunc {
 
 func corsConfig(server *gin.Engine) {
 	server.Use(cors.New(cors.Config{
-		AllowAllOrigins: true,
-
+		AllowOriginFunc: func(origin string) bool {
+			return true
+		},
 		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"},
-
 		AllowHeaders: []string{
 			"Origin",
 			"Content-Type",
@@ -121,17 +121,8 @@ func corsConfig(server *gin.Engine) {
 			"Cache-Control",
 			"X-Requested-With",
 		},
-
-		AllowCredentials: false,
-
-		MaxAge: 12 * time.Hour,
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
 	}))
-
-	server.Use(func(ctx *gin.Context) {
-		if ctx.Request.Method == http.MethodOptions {
-			ctx.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-		ctx.Next()
-	})
 }

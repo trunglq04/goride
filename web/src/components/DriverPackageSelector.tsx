@@ -1,38 +1,52 @@
-import { PackagesMeta } from './PackagesMeta'
-import { CarPackageSlug } from '../types'
-import { cn } from "../lib/utils"
+import React from "react";
+import { PackagesMeta } from "./PackagesMeta";
+import { CarPackageSlug } from "../types";
+import { cn } from "../lib/utils";
+import { Users } from "lucide-react";
 
 interface DriverPackageSelectorProps {
-  onSelect: (packageSlug: CarPackageSlug) => void
+  onSelect: (packageSlug: CarPackageSlug) => void;
 }
 
 export function DriverPackageSelector({ onSelect }: DriverPackageSelectorProps) {
   return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="bg-white w-full h-full sm:h-auto sm:rounded-2xl sm:shadow-lg sm:max-w-md sm:mx-4 p-4 sm:p-6">
-        <h2 className="text-lg sm:text-xl font-semibold mb-2">Select your car type</h2>
-        <p className="text-sm text-gray-500 mb-6">Choose the type of car you&apos;ll be driving</p>
-        <div className="space-y-3 sm:space-y-4">
+    <div className="flex items-center justify-center min-h-[calc(100vh-64px)] p-4 bg-[#f4f4f6]">
+      <div className="bg-white border border-black/10 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-sm">
+        <h2 className="font-serif-brand text-2xl font-bold text-[#18181b] tracking-tight mb-1">
+          Select Vehicle Class
+        </h2>
+        <p className="text-xs text-zinc-500 mb-6">
+          Specify the vehicle class you will be driving today on GoRide.
+        </p>
+
+        <div className="space-y-3">
           {Object.entries(PackagesMeta).map(([slug, meta]) => (
             <div
               key={slug}
               className={cn(
-                "flex items-center gap-3 sm:gap-4 p-3 sm:p-4 sm:rounded-lg sm:border transition-all cursor-pointer",
-                "hover:border-primary hover:bg-primary/5",
+                "flex items-center justify-between p-4 rounded-2xl border border-black/8 bg-[#fafafb] transition-all cursor-pointer tactile-press",
+                "hover:border-[#18181b] hover:bg-white hover:shadow-sm"
               )}
               onClick={() => onSelect(slug as CarPackageSlug)}
             >
-              <div className="p-1.5 sm:p-2 bg-gray-100 rounded-lg">
-                {meta?.icon}
+              <div className="flex items-center gap-3.5">
+                <div className="p-1 flex items-center justify-center">
+                  {meta?.icon}
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[#18181b]">{meta?.name}</h3>
+                  <p className="text-xs text-zinc-500">{meta?.description}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-medium text-sm sm:text-base">{meta?.name}</h3>
-                <p className="text-xs sm:text-sm text-gray-500">{meta?.description}</p>
+
+              <div className="flex items-center gap-1 text-xs text-zinc-400">
+                <Users className="w-3.5 h-3.5" />
+                <span>{meta.seats}</span>
               </div>
             </div>
           ))}
         </div>
       </div>
     </div>
-  )
+  );
 }

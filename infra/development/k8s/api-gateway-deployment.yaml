@@ -57,6 +57,18 @@ spec:
               value: "trip-service:9093"
             - name: DRIVER_SERVICE_URL
               value: "driver-service:9092"
+            - name: AUTH_SERVICE_URL
+              value: "auth-service:9094"
+            - name: JWT_PUBLIC_KEY_PATH
+              value: "/etc/secrets/jwt_public.pem"
+          volumeMounts:
+            - name: jwt-keys
+              mountPath: /etc/secrets
+              readOnly: true
+      volumes:
+        - name: jwt-keys
+          secret:
+            secretName: jwt-keys
 ---
 apiVersion: v1
 kind: Service

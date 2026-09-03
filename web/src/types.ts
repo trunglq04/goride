@@ -62,3 +62,19 @@ export interface Driver {
   profilePicture: string;
   carPlate: string;
 }
+
+export interface AuthUser {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  role: "rider" | "driver" | "admin";
+  emailConfirmed: boolean;
+  createdAt: string;
+}
+
+export interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: AuthUser;
+}

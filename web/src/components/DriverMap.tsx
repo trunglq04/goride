@@ -1,56 +1,48 @@
-"use client";
+'use client';
 
-import { useDriverStreamConnection } from "../hooks/useDriverStreamConnection";
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
-import L from "leaflet";
-import { MapClickHandler } from "./MapClickHandler";
-import { useMemo, useState } from "react";
-import { useRef } from "react";
-import { CarPackageSlug, Coordinate } from "../types";
-import { DriverTripOverview } from "./DriverTripOverview";
-import * as Geohash from "ngeohash";
-import { RoutingControl } from "./RoutingControl";
-import { DriverCard } from "./DriverCard";
-import { TripEvents } from "../contracts";
-import { uuid } from "@/utils/uuid";
-import { VITE_CARTO_API_KEY } from "@/constants";
+import { useDriverStreamConnection } from '../hooks/useDriverStreamConnection';
+import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
+import L from 'leaflet';
+import { MapClickHandler } from './MapClickHandler';
+import { useMemo, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { CarPackageSlug, Coordinate } from '../types';
+import { DriverTripOverview } from './DriverTripOverview';
+import * as Geohash from 'ngeohash';
+import { RoutingControl } from './RoutingControl';
+import { DriverCard } from './DriverCard';
+import { TripEvents } from '../contracts';
+import { uuid } from '@/utils/uuid';
+import { VITE_CARTO_API_KEY } from '@/constants';
+import { useAuth } from '../lib/auth-context';
+import { AuthRequiredModal } from './auth/AuthRequiredModal';
+import {
+  pickupMarkerIcon,
+  destinationMarkerIcon,
+  driverMarkerIcon,
+} from './MapMarkers';
+import { Lock, AlertCircle } from 'lucide-react';
 
 const START_LOCATION: Coordinate = {
   latitude: 37.7749,
   longitude: -122.4194,
 };
 
-const driverMarker = new L.Icon({
-  iconUrl: "https://www.svgrepo.com/show/25407/car.svg",
-  iconSize: [30, 30],
-  iconAnchor: [15, 30],
-});
-
-const startLocationMarker = new L.Icon({
-  iconUrl: "https://www.svgrepo.com/show/535711/user.svg",
-  iconSize: [30, 40], // Size of the marker
-  iconAnchor: [20, 40], // Anchor point
-});
-
-const destinationMarker = new L.Icon({
-  iconUrl:
-    "data:image/svg+xml;utf8," +
-    encodeURIComponent(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#e11d48" stroke="#fff" stroke-width="1.5"><path d="M12 2C7.6 2 4 5.6 4 10c0 5.5 7.3 11.5 7.6 11.7.2.2.6.2.8 0C12.7 21.5 20 15.5 20 10c0-4.4-3.6-8-8-8zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>`,
-    ),
-  iconSize: [40, 40], // Size of the marker
-  iconAnchor: [20, 40], // Anchor point
-});
-
 export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
+  const router = useRouter();
+  const { user, accessToken, isAuthenticated } = useAuth();
+
+  const [showAuthModal, setShowAuthModal] = useState(!isAuthenticated);
   const mapRef = useRef<L.Map>(null);
-  const userID = useMemo(() => uuid(), []);
+  const guestUserID = useMemo(() => uuid(), []);
+  const userID = user?.id || guestUserID;
+
   const [riderLocation, setRiderLocation] =
     useState<Coordinate>(START_LOCATION);
 
   const driverGeohash = useMemo(
     () => Geohash.encode(riderLocation?.latitude, riderLocation?.longitude, 7),
-    [riderLocation?.latitude, riderLocation?.longitude],
+    [riderLocation?.latitude, riderLocation?.longitude]
   );
 
   const {
@@ -69,6 +61,11 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
   });
 
   const handleMapClick = (e: L.LeafletMouseEvent) => {
+    if (!isAuthenticated || !accessToken) {
+      setShowAuthModal(true);
+      return;
+    }
+
     const newLocation = {
       latitude: e.latlng.lat,
       longitude: e.latlng.lng,
@@ -78,7 +75,7 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
     const newGeohash = Geohash.encode(
       newLocation.latitude,
       newLocation.longitude,
-      7,
+      7
     );
 
     sendMessage({
@@ -92,8 +89,13 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
   };
 
   const handleAcceptTrip = () => {
+    if (!isAuthenticated || !accessToken) {
+      setShowAuthModal(true);
+      return;
+    }
+
     if (!requestedTrip || !requestedTrip.id || !driver) {
-      alert("No trip ID found or driver is not set");
+      alert('No trip ID found or driver is not set');
       return;
     }
 
@@ -111,7 +113,7 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
 
   const handleDeclineTrip = () => {
     if (!requestedTrip || !requestedTrip.id || !driver) {
-      alert("No trip ID found or driver is not set");
+      alert('No trip ID found or driver is not set');
       return;
     }
 
@@ -131,84 +133,126 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
   const parsedRoute = useMemo(
     () =>
       requestedTrip?.route?.geometry[0]?.coordinates.map(
-        (coord) => [coord?.longitude, coord?.latitude] as [number, number],
+        (coord) => [coord?.longitude, coord?.latitude] as [number, number]
       ),
-    [requestedTrip],
+    [requestedTrip]
   );
 
-  // destination is the last coordinate in the route
   const destination = useMemo(
     () =>
       requestedTrip?.route?.geometry[0]?.coordinates[
         requestedTrip?.route?.geometry[0]?.coordinates?.length - 1
       ],
-    [requestedTrip],
+    [requestedTrip]
   );
-  // start location is the first coordinate in the route
+
   const startLocation = useMemo(
     () => requestedTrip?.route?.geometry[0]?.coordinates[0],
-    [requestedTrip],
+    [requestedTrip]
   );
 
   if (error) {
-    return <div>Error: {error}</div>;
+    return (
+      <div className="p-8 text-center text-red-600 bg-red-50 rounded-2xl m-4">
+        Driver stream connection error: {error}
+      </div>
+    );
   }
 
   return (
-    <div className="relative flex flex-col md:flex-row h-screen">
-      <div className="flex-1">
+    <div className="relative flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
+      {/* Driver Auth Required Banner if not signed in */}
+      {!isAuthenticated && (
+        <div className="absolute top-3 left-4 right-4 md:right-[420px] max-w-md mx-auto z-30 pointer-events-auto">
+          <div className="p-2.5 bg-amber-50/95 backdrop-blur-md border border-amber-200/80 rounded-2xl shadow-sm flex items-center justify-between gap-3 text-xs text-amber-950">
+            <div className="flex items-center gap-2 truncate">
+              <span className="w-2 h-2 rounded-full bg-amber-600 animate-pulse shrink-0" />
+              <span className="font-semibold truncate">
+                Driver Sign In Required for Telemetry
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => router.push('/login')}
+                className="px-2.5 py-1 rounded-lg bg-[#18181b] text-white font-semibold text-[11px] tactile-press cursor-pointer"
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/register')}
+                className="px-2.5 py-1 rounded-lg bg-white border border-black/10 text-zinc-800 font-semibold text-[11px] tactile-press cursor-pointer"
+              >
+                Register
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Map */}
+      <div className="flex-1 relative h-full">
         <MapContainer
           center={[riderLocation.latitude, riderLocation.longitude]}
           zoom={13}
-          style={{ height: "100%", width: "100%" }}
+          style={{ height: '100%', width: '100%' }}
           ref={mapRef}
+          zoomControl={false}
         >
           <TileLayer
             url={`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${VITE_CARTO_API_KEY}`}
-            attribution="&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors &copy; <a href='https://carto.com/'>CARTO</a>"
+            attribution="&copy; OpenStreetMap contributors &copy; CARTO"
           />
 
           <Marker
             key={userID}
             position={[riderLocation.latitude, riderLocation.longitude]}
-            icon={driverMarker}
+            icon={driverMarkerIcon}
           >
             <Popup>
-              Driver ID: {userID}
-              <br />
-              Geohash: {driverGeohash}
+              <div className="text-xs p-1">
+                <p className="font-bold text-[#18181b]">Driver Location</p>
+                <p className="text-zinc-500 font-mono text-[10px]">
+                  Geohash: {driverGeohash}
+                </p>
+              </div>
             </Popup>
           </Marker>
 
           {startLocation && (
             <Marker
               position={[startLocation.longitude, startLocation.latitude]}
-              icon={startLocationMarker}
+              icon={pickupMarkerIcon}
             >
-              <Popup>Start Location</Popup>
+              <Popup>
+                <div className="text-xs font-semibold p-1">Rider Pickup</div>
+              </Popup>
             </Marker>
           )}
 
           {destination && (
             <Marker
               position={[destination.longitude, destination.latitude]}
-              icon={destinationMarker}
+              icon={destinationMarkerIcon}
             >
-              <Popup>Destination</Popup>
+              <Popup>
+                <div className="text-xs font-semibold p-1">Destination</div>
+              </Popup>
             </Marker>
           )}
 
           {parsedRoute && <RoutingControl route={parsedRoute} />}
-
           <MapClickHandler onClick={handleMapClick} />
         </MapContainer>
       </div>
 
-      <div className="flex flex-col md:w-[400px] bg-white border-t md:border-t-0 md:border-l">
-        <div className="p-4 border-b">
+      {/* Driver Sidebar Console (Tactile Card Column) */}
+      <div className="flex flex-col md:w-[380px] bg-white border-t md:border-t-0 md:border-l border-black/8 z-10 shadow-sm">
+        <div className="p-4 border-b border-black/5">
           <DriverCard driver={driver} packageSlug={packageSlug} />
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto p-2">
           <DriverTripOverview
             trip={requestedTrip}
             status={tripStatus}
@@ -218,6 +262,14 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
           />
         </div>
       </div>
+
+      {/* Auth Required Modal Dialog */}
+      <AuthRequiredModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        role="driver"
+        errorMessage="You must sign in to an authorized Driver Partner account to broadcast live vehicle telemetry and accept trips."
+      />
     </div>
   );
 };

@@ -54,14 +54,14 @@ func handleRegister(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		log.WarnContext(ctx, "Failed to parse register request", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please fill in all required registration fields."})
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to reach auth service"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
 		return
 	}
 	defer authService.Close()
@@ -75,7 +75,8 @@ func handleRegister(c *gin.Context) {
 	})
 	if err != nil {
 		log.ErrorContext(ctx, "Registration failed", "email", req.Email, "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		status, msg := tailorGRPCError(err)
+		c.JSON(status, gin.H{"error": msg})
 		return
 	}
 
@@ -90,14 +91,14 @@ func handleLogin(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		log.WarnContext(ctx, "Failed to parse login request", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please provide both email and password."})
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to reach auth service"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
 		return
 	}
 	defer authService.Close()
@@ -108,7 +109,8 @@ func handleLogin(c *gin.Context) {
 	})
 	if err != nil {
 		log.ErrorContext(ctx, "Login failed", "email", req.Email, "err", err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		status, msg := tailorGRPCError(err)
+		c.JSON(status, gin.H{"error": msg})
 		return
 	}
 
@@ -123,14 +125,14 @@ func handleVerifyOTP(c *gin.Context) {
 	var req verifyOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		log.WarnContext(ctx, "Failed to parse verify OTP request", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please enter the 6-digit verification code."})
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to reach auth service"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
 		return
 	}
 	defer authService.Close()
@@ -141,7 +143,8 @@ func handleVerifyOTP(c *gin.Context) {
 	})
 	if err != nil {
 		log.ErrorContext(ctx, "OTP verification failed", "user_id", req.UserID, "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		status, msg := tailorGRPCError(err)
+		c.JSON(status, gin.H{"error": msg})
 		return
 	}
 
@@ -156,14 +159,14 @@ func handleResendOTP(c *gin.Context) {
 	var req resendOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		log.WarnContext(ctx, "Failed to parse resend OTP request", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request parameters."})
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to reach auth service"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
 		return
 	}
 	defer authService.Close()
@@ -173,7 +176,8 @@ func handleResendOTP(c *gin.Context) {
 	})
 	if err != nil {
 		log.ErrorContext(ctx, "Resend OTP failed", "user_id", req.UserID, "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		status, msg := tailorGRPCError(err)
+		c.JSON(status, gin.H{"error": msg})
 		return
 	}
 
@@ -187,14 +191,14 @@ func handleRefreshToken(c *gin.Context) {
 	var req refreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		log.WarnContext(ctx, "Failed to parse refresh token request", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Refresh token is required."})
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to reach auth service"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
 		return
 	}
 	defer authService.Close()
@@ -204,7 +208,8 @@ func handleRefreshToken(c *gin.Context) {
 	})
 	if err != nil {
 		log.ErrorContext(ctx, "Token refresh failed", "err", err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		status, msg := tailorGRPCError(err)
+		c.JSON(status, gin.H{"error": msg})
 		return
 	}
 
@@ -218,14 +223,14 @@ func handleLogout(c *gin.Context) {
 	var req logoutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		log.WarnContext(ctx, "Failed to parse logout request", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Refresh token is required for logout."})
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to reach auth service"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
 		return
 	}
 	defer authService.Close()
@@ -235,7 +240,8 @@ func handleLogout(c *gin.Context) {
 	})
 	if err != nil {
 		log.ErrorContext(ctx, "Logout failed", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		status, msg := tailorGRPCError(err)
+		c.JSON(status, gin.H{"error": msg})
 		return
 	}
 
@@ -249,14 +255,14 @@ func handleGetMe(c *gin.Context) {
 	// Get user ID from JWT middleware context
 	userID, ok := auth.GetUserIDFromContext(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required. Please sign in."})
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to reach auth service"})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
 		return
 	}
 	defer authService.Close()
@@ -268,7 +274,8 @@ func handleGetMe(c *gin.Context) {
 	resp, err := authService.Client.GetMe(grpcCtx, &pb.GetMeRequest{})
 	if err != nil {
 		log.ErrorContext(ctx, "GetMe failed", "user_id", userID, "err", err)
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		status, msg := tailorGRPCError(err)
+		c.JSON(status, gin.H{"error": msg})
 		return
 	}
 
