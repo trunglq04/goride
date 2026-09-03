@@ -42,7 +42,7 @@ docker_build_with_restart(
 
 k8s_yaml('./infra/development/k8s/api-gateway-deployment.yaml')
 k8s_resource('api-gateway', port_forwards=8081,
-             resource_deps=['api-gateway-compile', 'trip-service', 'driver-service', 'payment-service'], labels="services") # Add trip service and driver service to resource_deps to ensure them start before starting the API Gateway
+             resource_deps=['api-gateway-compile', 'trip-service', 'driver-service', 'payment-service', 'auth-service'], labels="services") # Add trip service and driver service to resource_deps to ensure them start before starting the API Gateway
 ### End of API Gateway ###
 
 ### Trip Service ###
@@ -178,3 +178,81 @@ k8s_resource('grafana',
              labels='tooling')
 
 ### End of Monitoring ###
+
+### PostgreSQL ###
+
+k8s_yaml('./infra/development/k8s/postgres-deployment.yaml')
+k8s_resource('postgresql', port_forwards=['5432'], labels='tooling')
+
+### End of PostgreSQL ###
+
+### JWT Keys Secret ###
+# Create the JWT keys secret from local PEM files
+local('kubectl create secret generic jwt-keys \
+  --from-file=jwt_private.pem=./infra/development/keys/jwt_private.pem \
+  --from-file=jwt_public.pem=./infra/development/keys/jwt_public.pem \
+  --dry-run=client -o yaml | kubectl apply -f -', quiet=True)
+
+### End of JWT Keys Secret ###
+
+### Auth Service ###
+
+auth_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/auth-service ./services/auth-service/cmd/main.go'
+if os.name == 'nt':
+  auth_compile_cmd = './infra/development/docker/auth-build.bat'
+
+local_resource(
+  'auth-service-compile',
+  auth_compile_cmd,
+  deps=['./services/auth-service', './shared'], labels="compiles")
+
+docker_build_with_restart(
+  'github.com/trunglq04/goride/auth-service',
+  '.',
+  entrypoint=['/app/build/auth-service'],
+  dockerfile='./infra/development/docker/auth-service.Dockerfile',
+  only=[
+    './build/auth-service',
+    './shared',
+  ],
+  live_update=[
+    sync('./build', '/app/build'),
+    sync('./shared', '/app/shared'),
+  ],
+)
+
+k8s_yaml('./infra/development/k8s/auth-service-deployment.yaml')
+k8s_resource('auth-service', resource_deps=['auth-service-compile', 'rabbitmq', 'postgresql'], labels="services")
+
+### End of Auth Service ###
+
+### Notification Service ###
+
+notification_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/notification-service ./services/notification-service/*.go'
+if os.name == 'nt':
+  notification_compile_cmd = './infra/development/docker/notification-build.bat'
+
+local_resource(
+  'notification-service-compile',
+  notification_compile_cmd,
+  deps=['./services/notification-service', './shared'], labels="compiles")
+
+docker_build_with_restart(
+  'github.com/trunglq04/goride/notification-service',
+  '.',
+  entrypoint=['/app/build/notification-service'],
+  dockerfile='./infra/development/docker/notification-service.Dockerfile',
+  only=[
+    './build/notification-service',
+    './shared',
+  ],
+  live_update=[
+    sync('./build', '/app/build'),
+    sync('./shared', '/app/shared'),
+  ],
+)
+
+k8s_yaml('./infra/development/k8s/notification-service-deployment.yaml')
+k8s_resource('notification-service', resource_deps=['notification-service-compile', 'rabbitmq'], labels="services")
+
+### End of Notification Service ###

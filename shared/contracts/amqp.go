@@ -31,4 +31,8 @@ const (
 
 	// Payment commands (payment.cmd.*)
 	PaymentCmdCreateSession = "payment.cmd.create_session"
+
+	// Auth/User events (user.event.*)
+	UserEventRegistered = "user.event.registered"
+	UserEventOTPResent  = "user.event.otp_resent"
 )

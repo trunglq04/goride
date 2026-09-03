@@ -16,6 +16,7 @@ import (
 
 const (
 	TripExchange       = "trip"
+	AuthExchange       = "auth"
 	DeadLetterExchange = "dlx"
 )
 
@@ -80,8 +81,13 @@ func (r *RabbitMQ) Close() {
 }
 
 func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, message contracts.AmqpMessage) error {
+	return r.PublishMessageToExchange(ctx, TripExchange, routingKey, message)
+}
+
+// PublishMessageToExchange publishes a message to a specific exchange.
+func (r *RabbitMQ) PublishMessageToExchange(ctx context.Context, exchange, routingKey string, message contracts.AmqpMessage) error {
 	slog.DebugContext(ctx, "Publishing message",
-		"exchange", TripExchange,
+		"exchange", exchange,
 		"routing_key", routingKey,
 		"owner_id", message.OwnerID,
 	)
@@ -100,7 +106,7 @@ func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, messag
 		Body:         jsonMsg,
 	}
 
-	err = tracing.TracedPublisher(ctx, TripExchange, routingKey, msg, r.publish)
+	err = tracing.TracedPublisher(ctx, exchange, routingKey, msg, r.publishToExchange(exchange))
 	if err == nil {
 		metrics.RecordPublish(routingKey)
 	}
@@ -198,14 +204,17 @@ func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) err
 	return nil
 }
 
-func (r *RabbitMQ) publish(ctx context.Context, exchange, routingKey string, msg amqp091.Publishing) error {
-	return r.Channel.PublishWithContext(ctx,
-		TripExchange, // exchange
-		routingKey,   // routing key
-		false,        // mandatory
-		false,        // immediate
-		msg,          // amqp091.Publishing
-	)
+// publishToExchange returns a publish function for the specified exchange.
+func (r *RabbitMQ) publishToExchange(exchange string) func(ctx context.Context, ex, routingKey string, msg amqp091.Publishing) error {
+	return func(ctx context.Context, ex, routingKey string, msg amqp091.Publishing) error {
+		return r.Channel.PublishWithContext(ctx,
+			exchange,   // exchange
+			routingKey, // routing key
+			false,      // mandatory
+			false,      // immediate
+			msg,        // amqp091.Publishing
+		)
+	}
 }
 
 func (r *RabbitMQ) setupDeadLetterExchange() error {
@@ -365,6 +374,32 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		[]string{contracts.PaymentEventSuccess},
 		TripExchange,
 		WithTTL(notifyTTL),
+	)
+	if err != nil {
+		return err
+	}
+
+	// Auth exchange and queues
+	err = r.Channel.ExchangeDeclare(
+		AuthExchange, // name
+		"topic",      // type
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
+	)
+	if err != nil {
+		return fmt.Errorf("failed to declare exchange %s: %v", AuthExchange, err)
+	}
+
+	err = r.declareAndBindQueue(
+		SendEmailOTPQueue,
+		[]string{
+			contracts.UserEventRegistered,
+			contracts.UserEventOTPResent,
+		},
+		AuthExchange,
 	)
 	if err != nil {
 		return err

@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/trunglq04/goride/shared/auth"
 	"github.com/trunglq04/goride/shared/env"
 	"github.com/trunglq04/goride/shared/logger"
 	"github.com/trunglq04/goride/shared/messaging"
@@ -67,17 +68,45 @@ func main() {
 
 	log.Info("RabbitMQ connected")
 
+	// Load RSA public key for JWT validation
+	publicKeyPath := env.GetString("JWT_PUBLIC_KEY_PATH", "/etc/secrets/jwt_public.pem")
+	publicKey, err := auth.LoadPublicKey(publicKeyPath)
+	if err != nil {
+		logger.Fatal("Failed to load RSA public key", "path", publicKeyPath, "err", err)
+	}
+	log.Info("RSA public key loaded", "path", publicKeyPath)
+
+	// JWT authentication middleware
+	jwtMiddleware := auth.JWTAuthMiddleware(publicKey)
+
+	// ---- Public auth routes (no JWT required) ----
+	authGroup := router.Group("/auth")
+	authGroup.Use(authRateLimiter())
+	authGroup.POST("/register", handleRegister)
+	authGroup.POST("/login", handleLogin)
+	authGroup.POST("/verify-otp", handleVerifyOTP)
+	authGroup.POST("/resend-otp", handleResendOTP)
+	authGroup.POST("/refresh", handleRefreshToken)
+	authGroup.POST("/logout", handleLogout)
+
+	// ---- Protected auth routes (JWT required) ----
+	authProtected := router.Group("/auth")
+	authProtected.Use(jwtMiddleware)
+	authProtected.GET("/me", handleGetMe)
+
+	// ---- Protected trip routes ----
 	trip := router.Group("/trip")
+	trip.Use(jwtMiddleware)
 	trip.POST("/preview", handleTripPreview)
 	trip.POST("/start", handleTripStart)
 	trip.POST("/cancel", handleTripCancel)
 
-	// WebSocket
+	// WebSocket (JWT validated via query param or connection upgrade)
 	ws := router.Group("/ws")
 	ws.GET("/drivers", func(c *gin.Context) { handleDriversWebSocket(c, rabbitmq) })
 	ws.GET("/riders", func(c *gin.Context) { handleRidersWebSocket(c, rabbitmq) })
 
-	// Webhook
+	// Webhook (Stripe validates via its own signature)
 	wh := router.Group("/webhook")
 	wh.POST("/stripe", func(c *gin.Context) { handleStripeWebhook(c, rabbitmq) })
 

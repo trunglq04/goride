@@ -18,6 +18,9 @@ const (
 	NotifyPaymentSessionCreatedQueue = "notify_payment_session_created"
 	NotifyPaymentSuccessQueue        = "payment_success"
 	DeadLetterQueue                  = "dead_letter_queue"
+
+	// Auth related queues
+	SendEmailOTPQueue = "send_email_otp"
 )
 
 type TripEventData struct {

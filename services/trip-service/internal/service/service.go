@@ -47,7 +47,7 @@ func (s *service) CreateTrip(ctx context.Context, fare *domain.RideFareModel) (*
 	}
 
 	metrics.RecordTripEvent("created", "")
-	
+
 	if err := s.publisher.PublishTripCreated(ctx, model); err != nil {
 		logger.L().ErrorContext(ctx, "Failed to publish trip created event", "err", err)
 	}
@@ -75,7 +75,7 @@ func (s *service) CancelTrip(ctx context.Context, userID, tripID, reason string)
 	if trip.Status == "STARTED" || trip.Status == "DRIVER_ACCEPTED" {
 		metrics.DecActiveTrip("unknown")
 	}
-	
+
 	// Update the trip status to reflect the cancellation before publishing
 	trip.Status = "CANCELED"
 	if err := s.publisher.PublishTripCanceled(ctx, trip); err != nil {
@@ -191,6 +191,14 @@ func (s *service) GetAndValidateFare(ctx context.Context, fareID, userID string)
 	return fare, nil
 }
 
+func (s *service) GetTripByID(ctx context.Context, id string) (*domain.TripModel, error) {
+	return s.repo.GetTripByID(ctx, id)
+}
+
+func (s *service) UpdateTrip(ctx context.Context, tripID string, status string, driver *pbd.Driver, excludedDriverID *string) error {
+	return s.repo.UpdateTrip(ctx, tripID, status, driver, excludedDriverID)
+}
+
 func estimateFareRoute(f *domain.RideFareModel, route *tripTypes.OsrmApiResponse) *domain.RideFareModel {
 	pricingCfg := tripTypes.DefaultPricingConfig()
 	carPackagePrice := f.TotalPriceInCents
@@ -227,12 +235,4 @@ func getBaseFares() []*domain.RideFareModel {
 			TotalPriceInCents: 1000,
 		},
 	}
-}
-
-func (s *service) GetTripByID(ctx context.Context, id string) (*domain.TripModel, error) {
-	return s.repo.GetTripByID(ctx, id)
-}
-
-func (s *service) UpdateTrip(ctx context.Context, tripID string, status string, driver *pbd.Driver, excludedDriverID *string) error {
-	return s.repo.UpdateTrip(ctx, tripID, status, driver, excludedDriverID)
 }

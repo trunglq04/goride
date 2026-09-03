@@ -3,11 +3,73 @@ package main
 import (
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/time/rate"
 )
+
+type client struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
+
+type RateLimiter struct {
+	mu     sync.Mutex
+	clients map[string]*client
+}
+
+// authRateLimiter returns a Gin middleware that applies per-IP rate limiting
+// to auth endpoints (login, register, OTP). Limits to 5 req/s with a burst of 10.
+func authRateLimiter() gin.HandlerFunc {
+	rl := &RateLimiter{
+		mu:     sync.Mutex{},
+		clients: make(map[string]*client),
+	}
+
+	// Clean up stale entries every 3 minutes
+	go func() {
+		for {
+			time.Sleep(3 * time.Minute)
+			rl.mu.Lock()
+			for ip, c := range rl.clients {
+				if time.Since(c.lastSeen) > 5*time.Minute {
+					delete(rl.clients, ip)
+				}
+			}
+			rl.mu.Unlock()
+		}
+	}()
+
+	return func(c *gin.Context) {
+		ip := c.ClientIP()
+
+		rl.mu.Lock()
+		if _, found := rl.clients[ip]; !found {
+			rl.clients[ip] = &client{
+				limiter: rate.NewLimiter(rate.Limit(5), 10), // 5 req/s, burst 10
+			}
+		}
+		rl.clients[ip].lastSeen = time.Now()
+		limiter := rl.clients[ip].limiter
+		rl.mu.Unlock()
+
+		if !limiter.Allow() {
+			slog.Warn("Rate limit exceeded for auth endpoint",
+				"client_ip", ip,
+				"path", c.Request.URL.Path,
+			)
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"error": "Too many requests, please try again later",
+			})
+			return
+		}
+
+		c.Next()
+	}
+}
 
 // requestLogger logs every incoming HTTP request with method, path, status,
 // duration and client IP. Level depends on the response status.
