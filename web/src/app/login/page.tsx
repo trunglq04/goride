@@ -3,10 +3,10 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AuthLayout } from "../../components/auth/AuthLayout";
-import { useAuth } from "../../lib/auth-context";
+import { AuthLayout } from "@/components/auth/AuthLayout";
+import { useAuth } from "@/contexts/AuthContext";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Loader2, AlertCircle, CheckCircle2, Shield } from "lucide-react";
-import { SedanSvg, SuvSvg } from "../../components/PackagesMeta";
+import { SedanSvg, SuvSvg } from "@/components/rider/PackagesMeta";
 
 export default function LoginPage() {
   const router = useRouter();

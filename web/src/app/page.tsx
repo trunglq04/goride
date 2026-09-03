@@ -3,22 +3,22 @@
 // Assets
 import 'leaflet/dist/leaflet.css';
 import dynamic from 'next/dynamic';
-import { Button } from '../components/ui/button';
+import { Button } from '@/components/ui/button';
 import { useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { CarPackageSlug } from '../types';
-import { DriverPackageSelector } from '../components/DriverPackageSelector';
-import { useAuth } from '../lib/auth-context';
-import { SedanSvg, SuvSvg } from '../components/PackagesMeta';
+import { CarPackageSlug } from '@/types';
+import { DriverPackageSelector } from '@/components/driver/DriverPackageSelector';
+import { useAuth } from '@/contexts/AuthContext';
+import { SedanSvg, SuvSvg } from '@/components/rider/PackagesMeta';
 import { ArrowRight, CheckCircle2, ShieldCheck, User, Compass, Car } from 'lucide-react';
-import { BrandLogo } from '../components/BrandLogo';
+import { BrandLogo } from '@/components/common/BrandLogo';
 
 // Dynamically import components that use Leaflet
 const DriverMap = dynamic(
-  () => import('../components/DriverMap').then((mod) => mod.DriverMap),
+  () => import('@/components/driver/DriverMap').then((mod) => mod.DriverMap),
   { ssr: false }
 );
-const RiderMap = dynamic(() => import('../components/RiderMap'), {
+const RiderMap = dynamic(() => import('@/components/rider/RiderMap'), {
   ssr: false,
 });
 

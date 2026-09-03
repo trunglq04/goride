@@ -3,8 +3,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AuthLayout } from '../../components/auth/AuthLayout';
-import { useAuth } from '../../lib/auth-context';
+import { AuthLayout } from '@/components/auth/AuthLayout';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   User,
   Mail,
@@ -20,7 +20,7 @@ import {
   RefreshCw,
   MailCheck,
 } from 'lucide-react';
-import { SedanSvg, SuvSvg } from '../../components/PackagesMeta';
+import { SedanSvg, SuvSvg } from '@/components/rider/PackagesMeta';
 
 export default function RegisterPage() {
   const router = useRouter();
