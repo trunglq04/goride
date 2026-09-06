@@ -12,25 +12,24 @@ import (
 	"github.com/trunglq04/goride/shared/env"
 	"github.com/trunglq04/goride/shared/logger"
 	"github.com/trunglq04/goride/shared/messaging"
-
-	"github.com/gin-gonic/gin"
+	"github.com/trunglq04/goride/shared/util"
 )
 
-func handleTripStart(c *gin.Context) {
-	ctx := c.Request.Context()
+func handleTripStart(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	log := logger.L()
 
 	var reqBody startTripRequest
-	if err := c.ShouldBindBodyWithJSON(&reqBody); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		log.WarnContext(ctx, "Failed to parse trip start request body", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse JSON data"})
+		util.WriteError(w, http.StatusBadRequest, "Failed to parse JSON data")
 		return
 	}
 
 	tripService, err := grpc_clients.NewTripServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create trip service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to reach trip service"})
+		util.WriteError(w, http.StatusBadGateway, "Failed to reach trip service")
 		return
 	}
 
@@ -43,7 +42,7 @@ func handleTripStart(c *gin.Context) {
 			"ride_fare_id", reqBody.RideFareID,
 			"err", err,
 		)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to call trip start"})
+		util.WriteError(w, http.StatusBadGateway, "Failed to call trip start")
 		return
 	}
 
@@ -53,27 +52,24 @@ func handleTripStart(c *gin.Context) {
 		"ride_fare_id", reqBody.RideFareID,
 	)
 
-	response := contracts.APIResponse{Data: tripStart}
-
-	c.JSON(http.StatusCreated, response)
-
+	util.WriteJSON(w, http.StatusCreated, contracts.APIResponse{Data: tripStart})
 }
 
-func handleTripCancel(c *gin.Context) {
-	ctx := c.Request.Context()
+func handleTripCancel(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	log := logger.L()
 
 	var reqBody cancelTripRequest
-	if err := c.ShouldBindBodyWithJSON(&reqBody); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		log.WarnContext(ctx, "Failed to parse trip cancel request body", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse JSON data"})
+		util.WriteError(w, http.StatusBadRequest, "Failed to parse JSON data")
 		return
 	}
 
 	tripService, err := grpc_clients.NewTripServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create trip service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to reach trip service"})
+		util.WriteError(w, http.StatusBadGateway, "Failed to reach trip service")
 		return
 	}
 	defer tripService.Close()
@@ -85,7 +81,7 @@ func handleTripCancel(c *gin.Context) {
 			"trip_id", reqBody.TripID,
 			"err", err,
 		)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to call trip cancel"})
+		util.WriteError(w, http.StatusBadGateway, "Failed to call trip cancel")
 		return
 	}
 
@@ -94,25 +90,24 @@ func handleTripCancel(c *gin.Context) {
 		"user_id", reqBody.UserID,
 	)
 
-	response := contracts.APIResponse{Data: cancelRes}
-	c.JSON(http.StatusOK, response)
+	util.WriteJSON(w, http.StatusOK, contracts.APIResponse{Data: cancelRes})
 }
 
-func handleTripPreview(c *gin.Context) {
-	ctx := c.Request.Context()
+func handleTripPreview(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	log := logger.L()
 
 	var reqBody previewTripRequest
-	if err := c.ShouldBindJSON(&reqBody); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		log.WarnContext(ctx, "Failed to parse trip preview request body", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse JSON data"})
+		util.WriteError(w, http.StatusBadRequest, "Failed to parse JSON data")
 		return
 	}
 
 	// validation
 	if reqBody.UserID == "" {
 		log.WarnContext(ctx, "Trip preview request is missing user ID")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user ID is required"})
+		util.WriteError(w, http.StatusBadRequest, "user ID is required")
 		return
 	}
 
@@ -120,7 +115,7 @@ func handleTripPreview(c *gin.Context) {
 	tripService, err := grpc_clients.NewTripServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create trip service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to reach trip service"})
+		util.WriteError(w, http.StatusBadGateway, "Failed to reach trip service")
 		return
 	}
 	defer tripService.Close()
@@ -131,7 +126,7 @@ func handleTripPreview(c *gin.Context) {
 			"user_id", reqBody.UserID,
 			"err", err,
 		)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to call trip preview"})
+		util.WriteError(w, http.StatusBadGateway, "Failed to call trip preview")
 		return
 	}
 
@@ -140,33 +135,31 @@ func handleTripPreview(c *gin.Context) {
 		"fares", len(tripPreview.RideFares),
 	)
 
-	response := contracts.APIResponse{Data: tripPreview}
-
-	c.JSON(http.StatusCreated, response)
+	util.WriteJSON(w, http.StatusCreated, contracts.APIResponse{Data: tripPreview})
 }
 
-func handleStripeWebhook(c *gin.Context, rb *messaging.RabbitMQ) {
-	ctx := c.Request.Context()
+func handleStripeWebhook(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ) {
+	ctx := r.Context()
 	log := logger.L()
 
-	body, err := io.ReadAll(c.Request.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to read webhook body", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read body"})
+		util.WriteError(w, http.StatusInternalServerError, "Failed to read body")
 		return
 	}
-	defer c.Request.Body.Close()
+	defer r.Body.Close()
 
 	webhookKey := env.GetString("STRIPE_WEBHOOK_KEY", "")
 	if webhookKey == "" {
 		log.Error("Stripe webhook key is not configured", "env", "STRIPE_WEBHOOK_KEY")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Webhook is not configured"})
+		util.WriteError(w, http.StatusInternalServerError, "Webhook is not configured")
 		return
 	}
 
 	event, err := webhook.ConstructEventWithOptions(
 		body,
-		c.GetHeader("Stripe-Signature"),
+		r.Header.Get("Stripe-Signature"),
 		webhookKey,
 		webhook.ConstructEventOptions{
 			IgnoreAPIVersionMismatch: true,
@@ -174,7 +167,7 @@ func handleStripeWebhook(c *gin.Context, rb *messaging.RabbitMQ) {
 	)
 	if err != nil {
 		log.WarnContext(ctx, "Invalid Stripe webhook signature", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid signature"})
+		util.WriteError(w, http.StatusBadRequest, "Invalid signature")
 		return
 	}
 
@@ -192,7 +185,7 @@ func handleStripeWebhook(c *gin.Context, rb *messaging.RabbitMQ) {
 				"event_id", event.ID,
 				"err", err,
 			)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload"})
+			util.WriteError(w, http.StatusBadRequest, "Invalid payload")
 			return
 		}
 
@@ -215,7 +208,7 @@ func handleStripeWebhook(c *gin.Context, rb *messaging.RabbitMQ) {
 				"event_id", event.ID,
 				"err", err,
 			)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to marshal payload"})
+			util.WriteError(w, http.StatusInternalServerError, "Failed to marshal payload")
 			return
 		}
 
@@ -234,17 +227,17 @@ func handleStripeWebhook(c *gin.Context, rb *messaging.RabbitMQ) {
 				"routing_key", contracts.PaymentEventSuccess,
 				"err", err,
 			)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to publish payment event"})
+			util.WriteError(w, http.StatusInternalServerError, "Failed to publish payment event")
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"status": "success"})
+		util.WriteJSON(w, http.StatusOK, map[string]string{"status": "success"})
 	default:
 		// Acknowledge all other event types — returning non-2xx causes Stripe to retry
 		log.DebugContext(ctx, "Unhandled Stripe event type ignored",
 			"event_type", event.Type,
 			"event_id", event.ID,
 		)
-		c.JSON(http.StatusOK, gin.H{"received": true})
+		util.WriteJSON(w, http.StatusOK, map[string]bool{"received": true})
 	}
 }

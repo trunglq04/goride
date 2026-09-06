@@ -1,14 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/trunglq04/goride/services/api-gateway/grpc_clients"
 	"github.com/trunglq04/goride/shared/auth"
 	"github.com/trunglq04/goride/shared/contracts"
 	"github.com/trunglq04/goride/shared/logger"
 	pb "github.com/trunglq04/goride/shared/proto/auth"
+	"github.com/trunglq04/goride/shared/util"
 
 	"google.golang.org/grpc/metadata"
 )
@@ -16,52 +17,52 @@ import (
 // ---- Request/Response types ----
 
 type registerRequest struct {
-	FullName string `json:"fullName" binding:"required"`
-	Email    string `json:"email" binding:"required"`
-	Phone    string `json:"phone" binding:"required"`
-	Password string `json:"password" binding:"required,min=8"`
-	Role     string `json:"role" binding:"required"`
+	FullName string `json:"fullName"`
+	Email    string `json:"email"`
+	Phone    string `json:"phone"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
 }
 
 type loginRequest struct {
-	Email    string `json:"email" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type verifyOTPRequest struct {
-	UserID string `json:"userID" binding:"required"`
-	Code   string `json:"code" binding:"required"`
+	UserID string `json:"userID"`
+	Code   string `json:"code"`
 }
 
 type resendOTPRequest struct {
-	UserID string `json:"userID" binding:"required"`
+	UserID string `json:"userID"`
 }
 
 type refreshTokenRequest struct {
-	RefreshToken string `json:"refreshToken" binding:"required"`
+	RefreshToken string `json:"refreshToken"`
 }
 
 type logoutRequest struct {
-	RefreshToken string `json:"refreshToken" binding:"required"`
+	RefreshToken string `json:"refreshToken"`
 }
 
 // ---- HTTP Handlers ----
 
-func handleRegister(c *gin.Context) {
-	ctx := c.Request.Context()
+func handleRegister(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	log := logger.L()
 
 	var req registerRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.WarnContext(ctx, "Failed to parse register request", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Please fill in all required registration fields."})
+		util.WriteError(w, http.StatusBadRequest, "Please fill in all required registration fields.")
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
+		util.WriteError(w, http.StatusBadGateway, "Unable to connect to auth service. Please try again.")
 		return
 	}
 	defer authService.Close()
@@ -76,29 +77,29 @@ func handleRegister(c *gin.Context) {
 	if err != nil {
 		log.ErrorContext(ctx, "Registration failed", "email", req.Email, "err", err)
 		status, msg := tailorGRPCError(err)
-		c.JSON(status, gin.H{"error": msg})
+		util.WriteError(w, status, msg)
 		return
 	}
 
 	log.InfoContext(ctx, "User registered", "user_id", resp.UserId, "email", req.Email)
-	c.JSON(http.StatusCreated, contracts.APIResponse{Data: resp})
+	util.WriteJSON(w, http.StatusCreated, contracts.APIResponse{Data: resp})
 }
 
-func handleLogin(c *gin.Context) {
-	ctx := c.Request.Context()
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	log := logger.L()
 
 	var req loginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.WarnContext(ctx, "Failed to parse login request", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Please provide both email and password."})
+		util.WriteError(w, http.StatusBadRequest, "Please provide both email and password.")
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
+		util.WriteError(w, http.StatusBadGateway, "Unable to connect to auth service. Please try again.")
 		return
 	}
 	defer authService.Close()
@@ -110,29 +111,29 @@ func handleLogin(c *gin.Context) {
 	if err != nil {
 		log.ErrorContext(ctx, "Login failed", "email", req.Email, "err", err)
 		status, msg := tailorGRPCError(err)
-		c.JSON(status, gin.H{"error": msg})
+		util.WriteError(w, status, msg)
 		return
 	}
 
 	log.InfoContext(ctx, "User logged in", "email", req.Email)
-	c.JSON(http.StatusOK, contracts.APIResponse{Data: resp})
+	util.WriteJSON(w, http.StatusOK, contracts.APIResponse{Data: resp})
 }
 
-func handleVerifyOTP(c *gin.Context) {
-	ctx := c.Request.Context()
+func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	log := logger.L()
 
 	var req verifyOTPRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.WarnContext(ctx, "Failed to parse verify OTP request", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Please enter the 6-digit verification code."})
+		util.WriteError(w, http.StatusBadRequest, "Please enter the 6-digit verification code.")
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
+		util.WriteError(w, http.StatusBadGateway, "Unable to connect to auth service. Please try again.")
 		return
 	}
 	defer authService.Close()
@@ -144,29 +145,29 @@ func handleVerifyOTP(c *gin.Context) {
 	if err != nil {
 		log.ErrorContext(ctx, "OTP verification failed", "user_id", req.UserID, "err", err)
 		status, msg := tailorGRPCError(err)
-		c.JSON(status, gin.H{"error": msg})
+		util.WriteError(w, status, msg)
 		return
 	}
 
 	log.InfoContext(ctx, "OTP verified", "user_id", req.UserID)
-	c.JSON(http.StatusOK, contracts.APIResponse{Data: resp})
+	util.WriteJSON(w, http.StatusOK, contracts.APIResponse{Data: resp})
 }
 
-func handleResendOTP(c *gin.Context) {
-	ctx := c.Request.Context()
+func handleResendOTP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	log := logger.L()
 
 	var req resendOTPRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.WarnContext(ctx, "Failed to parse resend OTP request", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request parameters."})
+		util.WriteError(w, http.StatusBadRequest, "Invalid request parameters.")
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
+		util.WriteError(w, http.StatusBadGateway, "Unable to connect to auth service. Please try again.")
 		return
 	}
 	defer authService.Close()
@@ -177,28 +178,28 @@ func handleResendOTP(c *gin.Context) {
 	if err != nil {
 		log.ErrorContext(ctx, "Resend OTP failed", "user_id", req.UserID, "err", err)
 		status, msg := tailorGRPCError(err)
-		c.JSON(status, gin.H{"error": msg})
+		util.WriteError(w, status, msg)
 		return
 	}
 
-	c.JSON(http.StatusOK, contracts.APIResponse{Data: resp})
+	util.WriteJSON(w, http.StatusOK, contracts.APIResponse{Data: resp})
 }
 
-func handleRefreshToken(c *gin.Context) {
-	ctx := c.Request.Context()
+func handleRefreshToken(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	log := logger.L()
 
 	var req refreshTokenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.WarnContext(ctx, "Failed to parse refresh token request", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Refresh token is required."})
+		util.WriteError(w, http.StatusBadRequest, "Refresh token is required.")
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
+		util.WriteError(w, http.StatusBadGateway, "Unable to connect to auth service. Please try again.")
 		return
 	}
 	defer authService.Close()
@@ -209,28 +210,28 @@ func handleRefreshToken(c *gin.Context) {
 	if err != nil {
 		log.ErrorContext(ctx, "Token refresh failed", "err", err)
 		status, msg := tailorGRPCError(err)
-		c.JSON(status, gin.H{"error": msg})
+		util.WriteError(w, status, msg)
 		return
 	}
 
-	c.JSON(http.StatusOK, contracts.APIResponse{Data: resp})
+	util.WriteJSON(w, http.StatusOK, contracts.APIResponse{Data: resp})
 }
 
-func handleLogout(c *gin.Context) {
-	ctx := c.Request.Context()
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	log := logger.L()
 
 	var req logoutRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.WarnContext(ctx, "Failed to parse logout request", "err", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Refresh token is required for logout."})
+		util.WriteError(w, http.StatusBadRequest, "Refresh token is required for logout.")
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
+		util.WriteError(w, http.StatusBadGateway, "Unable to connect to auth service. Please try again.")
 		return
 	}
 	defer authService.Close()
@@ -241,28 +242,28 @@ func handleLogout(c *gin.Context) {
 	if err != nil {
 		log.ErrorContext(ctx, "Logout failed", "err", err)
 		status, msg := tailorGRPCError(err)
-		c.JSON(status, gin.H{"error": msg})
+		util.WriteError(w, status, msg)
 		return
 	}
 
-	c.JSON(http.StatusOK, contracts.APIResponse{Data: resp})
+	util.WriteJSON(w, http.StatusOK, contracts.APIResponse{Data: resp})
 }
 
-func handleGetMe(c *gin.Context) {
-	ctx := c.Request.Context()
+func handleGetMe(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	log := logger.L()
 
 	// Get user ID from JWT middleware context
-	userID, ok := auth.GetUserIDFromContext(c)
+	userID, ok := auth.GetUserIDFromContext(r)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required. Please sign in."})
+		util.WriteError(w, http.StatusUnauthorized, "Authentication required. Please sign in.")
 		return
 	}
 
 	authService, err := grpc_clients.NewAuthServiceClient()
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to create auth service client", "err", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Unable to connect to auth service. Please try again."})
+		util.WriteError(w, http.StatusBadGateway, "Unable to connect to auth service. Please try again.")
 		return
 	}
 	defer authService.Close()
@@ -275,9 +276,9 @@ func handleGetMe(c *gin.Context) {
 	if err != nil {
 		log.ErrorContext(ctx, "GetMe failed", "user_id", userID, "err", err)
 		status, msg := tailorGRPCError(err)
-		c.JSON(status, gin.H{"error": msg})
+		util.WriteError(w, status, msg)
 		return
 	}
 
-	c.JSON(http.StatusOK, contracts.APIResponse{Data: resp})
+	util.WriteJSON(w, http.StatusOK, contracts.APIResponse{Data: resp})
 }

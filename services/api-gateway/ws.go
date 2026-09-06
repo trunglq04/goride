@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
 
 	"github.com/gorilla/websocket"
 	"github.com/trunglq04/goride/services/api-gateway/grpc_clients"
@@ -9,17 +10,15 @@ import (
 	"github.com/trunglq04/goride/shared/logger"
 	"github.com/trunglq04/goride/shared/messaging"
 	"github.com/trunglq04/goride/shared/proto/driver"
-
-	"github.com/gin-gonic/gin"
 )
 
 var connManager = messaging.NewConnectionManager()
 
-func handleRidersWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
-	ctx := c.Request.Context()
+func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ) {
+	ctx := r.Context()
 	log := logger.L()
 
-	wsConn, err := connManager.Upgrade(c)
+	wsConn, err := connManager.Upgrade(w, r)
 	if err != nil {
 		log.WarnContext(ctx, "WebSocket upgrade failed", "role", "rider", "err", err)
 		return
@@ -32,7 +31,7 @@ func handleRidersWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 		}
 	}(wsConn)
 
-	userID := c.Query("userID")
+	userID := r.URL.Query().Get("userID")
 	if userID == "" {
 		log.WarnContext(ctx, "Rider WebSocket connection rejected: no user ID provided")
 		return
@@ -72,11 +71,11 @@ func handleRidersWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 	}
 }
 
-func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
-	ctx := c.Request.Context()
+func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ) {
+	ctx := r.Context()
 	log := logger.L()
 
-	wsConn, err := connManager.Upgrade(c)
+	wsConn, err := connManager.Upgrade(w, r)
 	if err != nil {
 		log.WarnContext(ctx, "WebSocket upgrade failed", "role", "driver", "err", err)
 		return
@@ -89,13 +88,13 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 		}
 	}(wsConn)
 
-	userID := c.Query("userID")
+	userID := r.URL.Query().Get("userID")
 	if userID == "" {
 		log.WarnContext(ctx, "Driver WebSocket connection rejected: no user ID provided")
 		return
 	}
 
-	packageSlug := c.Query("packageSlug")
+	packageSlug := r.URL.Query().Get("packageSlug")
 	if packageSlug == "" {
 		log.WarnContext(ctx, "Driver WebSocket connection rejected: no package slug provided", "user_id", userID)
 		return
@@ -114,7 +113,7 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 	defer func() {
 		connManager.Remove(userID)
 
-		res, err := driverService.Client.UnregisterDriver(c, &driver.UnregisterDriverRequest{
+		res, err := driverService.Client.UnregisterDriver(ctx, &driver.UnregisterDriverRequest{
 			DriverID:    userID,
 			PackageSlug: packageSlug,
 		})
@@ -134,7 +133,7 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 		driverService.Close()
 	}()
 
-	driverData, err := driverService.Client.RegisterDriver(c, &driver.RegisterDriverRequest{
+	driverData, err := driverService.Client.RegisterDriver(ctx, &driver.RegisterDriverRequest{
 		DriverID:    userID,
 		PackageSlug: packageSlug,
 	})
@@ -211,7 +210,7 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 		// Handle the different message types
 		switch driverMsg.Type {
 		case contracts.DriverCmdLocation:
-			if err := rb.PublishMessage(c,
+			if err := rb.PublishMessage(ctx,
 				driverMsg.Type,
 				contracts.AmqpMessage{
 					OwnerID: userID,
@@ -224,7 +223,7 @@ func handleDriversWebSocket(c *gin.Context, rb *messaging.RabbitMQ) {
 				)
 			}
 		case contracts.DriverCmdTripAccept, contracts.DriverCmdTripDecline:
-			if err := rb.PublishMessage(c,
+			if err := rb.PublishMessage(ctx,
 				driverMsg.Type,
 				contracts.AmqpMessage{
 					OwnerID: userID,

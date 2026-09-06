@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -159,11 +158,11 @@ func Init(serviceName string) {
 // StartMetricsServer starts a dedicated HTTP server on addr (e.g. ":9091")
 // that exposes /metrics for Prometheus scraping. It runs in the background.
 func StartMetricsServer(server, addr string) {
-	r := gin.New()
-	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
 	go func() {
 		slog.Info("Prometheus metrics server listening", "server", server, "addr", addr)
-		if err := r.Run(addr); err != nil && err != http.ErrServerClosed {
+		if err := http.ListenAndServe(addr, mux); err != nil && err != http.ErrServerClosed {
 			slog.Error("Prometheus metrics server error", "server", server, "addr", addr, "err", err)
 		}
 	}()

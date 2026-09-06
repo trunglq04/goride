@@ -4,45 +4,58 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
-func WrapHandler(operation string, handler gin.HandlerFunc) gin.HandlerFunc {
+// WrapHandler wraps a standard http.HandlerFunc with an OpenTelemetry span.
+func WrapHandler(operation string, handler http.HandlerFunc) http.HandlerFunc {
 	tracer := otel.GetTracerProvider().Tracer(operation)
-	return func(c *gin.Context) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, span := tracer.Start(
-			c.Request.Context(),
+			r.Context(),
 			operation,
 			trace.WithAttributes(
-				semconv.HTTPRequestMethodKey.String(c.Request.Method),
-				semconv.HTTPRouteKey.String(c.FullPath()),
+				semconv.HTTPRequestMethodKey.String(r.Method),
+				semconv.HTTPRouteKey.String(r.URL.Path),
 			),
 			trace.WithSpanKind(trace.SpanKindServer),
 		)
 		defer func() {
-			if r := recover(); r != nil {
-				span.RecordError(fmt.Errorf("panic: %v", r))
+			if rec := recover(); rec != nil {
+				span.RecordError(fmt.Errorf("panic: %v", rec))
 				span.SetStatus(codes.Error, "panic")
 				span.End()
-				panic(r) // re-panic so gin.Recovery() still handles the HTTP response
+				panic(rec) // re-panic so recovery middleware can handle the HTTP response
 			}
 			span.End()
 		}()
 
 		// Inject span context back so the handler (and downstream calls) can use it
-		c.Request = c.Request.WithContext(ctx)
-
-		handler(c)
+		rw := &statusResponseWriter{ResponseWriter: w}
+		handler(rw, r.WithContext(ctx))
 
 		// Record response status after handler finishes
-		status := c.Writer.Status()
+		status := rw.status
+		if status == 0 {
+			status = http.StatusOK
+		}
 		span.SetAttributes(semconv.HTTPResponseStatusCodeKey.Int(status))
 		if status >= http.StatusInternalServerError {
 			span.SetStatus(codes.Error, http.StatusText(status))
 		}
 	}
+}
+
+func (rw *statusResponseWriter) WriteHeader(code int) {
+	rw.status = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+// statusResponseWriter captures the HTTP status code for span recording.
+type statusResponseWriter struct {
+	http.ResponseWriter
+	status int
 }

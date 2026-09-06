@@ -15,9 +15,7 @@ import (
 	"github.com/trunglq04/goride/shared/messaging"
 	"github.com/trunglq04/goride/shared/metrics"
 	"github.com/trunglq04/goride/shared/tracing"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
-
-	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var (
@@ -32,8 +30,8 @@ func main() {
 
 	// Initialize Tracing
 	tracerCfg := tracing.Config{
-		ServiceName:    "api-gateway",
-		Environment:    env.GetString("ENVIRONMENT", "developement"),
+		ServiceName:      "api-gateway",
+		Environment:      env.GetString("ENVIRONMENT", "developement"),
 		ExporterEndpoint: env.GetString("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317"),
 	}
 
@@ -50,14 +48,6 @@ func main() {
 	// Initialize Prometheus metrics
 	metrics.Init("api-gateway")
 	metrics.StartMetricsServer("api-gateway", ":9091")
-
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.New()
-	router.Use(gin.Recovery())
-	router.Use(requestLogger())
-	router.Use(otelgin.Middleware(tracerCfg.ServiceName))
-	router.Use(metrics.MetricMiddleware())
-	corsConfig(router)
 
 	// RabbitMQ connection
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
@@ -79,40 +69,73 @@ func main() {
 	// JWT authentication middleware
 	jwtMiddleware := auth.JWTAuthMiddleware(publicKey)
 
+	// Global middleware stack
+	globalMiddleware := []func(http.Handler) http.Handler{
+		recoveryMiddleware(),
+		requestLogger(),
+		corsMiddleware(),
+		metrics.MetricMiddleware(),
+	}
+
+	mux := http.NewServeMux()
+
 	// ---- Public auth routes (no JWT required) ----
-	authGroup := router.Group("/auth")
-	authGroup.Use(authRateLimiter())
-	authGroup.POST("/register", handleRegister)
-	authGroup.POST("/login", handleLogin)
-	authGroup.POST("/verify-otp", handleVerifyOTP)
-	authGroup.POST("/resend-otp", handleResendOTP)
-	authGroup.POST("/refresh", handleRefreshToken)
-	authGroup.POST("/logout", handleLogout)
+	authPublic := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/auth/register":
+				handleRegister(w, r)
+			case "/auth/login":
+				handleLogin(w, r)
+			case "/auth/verify-otp":
+				handleVerifyOTP(w, r)
+			case "/auth/resend-otp":
+				handleResendOTP(w, r)
+			case "/auth/refresh":
+				handleRefreshToken(w, r)
+			case "/auth/logout":
+				handleLogout(w, r)
+			default:
+				http.NotFound(w, r)
+			}
+		}),
+		authRateLimiter(),
+	)
+	mux.Handle("/auth/register", authPublic)
+	mux.Handle("/auth/login", authPublic)
+	mux.Handle("/auth/verify-otp", authPublic)
+	mux.Handle("/auth/resend-otp", authPublic)
+	mux.Handle("/auth/refresh", authPublic)
+	mux.Handle("/auth/logout", authPublic)
 
 	// ---- Protected auth routes (JWT required) ----
-	authProtected := router.Group("/auth")
-	authProtected.Use(jwtMiddleware)
-	authProtected.GET("/me", handleGetMe)
+	mux.Handle("/auth/me", chain(http.HandlerFunc(handleGetMe), jwtMiddleware))
 
-	// ---- Protected trip routes ----
-	trip := router.Group("/trip")
-	trip.Use(jwtMiddleware)
-	trip.POST("/preview", handleTripPreview)
-	trip.POST("/start", handleTripStart)
-	trip.POST("/cancel", handleTripCancel)
+	// ---- Protected trip routes (JWT required) ----
+	mux.Handle("/trip/preview", chain(http.HandlerFunc(handleTripPreview), jwtMiddleware))
+	mux.Handle("/trip/start", chain(http.HandlerFunc(handleTripStart), jwtMiddleware))
+	mux.Handle("/trip/cancel", chain(http.HandlerFunc(handleTripCancel), jwtMiddleware))
 
-	// WebSocket (JWT validated via query param or connection upgrade)
-	ws := router.Group("/ws")
-	ws.GET("/drivers", func(c *gin.Context) { handleDriversWebSocket(c, rabbitmq) })
-	ws.GET("/riders", func(c *gin.Context) { handleRidersWebSocket(c, rabbitmq) })
+	// ---- WebSocket routes ----
+	mux.Handle("/ws/drivers", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleDriversWebSocket(w, r, rabbitmq)
+	}))
+	mux.Handle("/ws/riders", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleRidersWebSocket(w, r, rabbitmq)
+	}))
 
-	// Webhook (Stripe validates via its own signature)
-	wh := router.Group("/webhook")
-	wh.POST("/stripe", func(c *gin.Context) { handleStripeWebhook(c, rabbitmq) })
+	// ---- Webhook (Stripe validates via its own signature) ----
+	mux.Handle("/webhook/stripe", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleStripeWebhook(w, r, rabbitmq)
+	}))
+
+	// Wrap the entire mux with global middleware and OTel HTTP instrumentation
+	handler := chain(mux, globalMiddleware...)
+	handler = otelhttp.NewHandler(handler, tracerCfg.ServiceName)
 
 	server := &http.Server{
 		Addr:    httpAddr,
-		Handler: router,
+		Handler: handler,
 	}
 
 	serverErrors := make(chan error, 1)

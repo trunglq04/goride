@@ -1,13 +1,12 @@
 package http
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 
 	"github.com/trunglq04/goride/services/trip-service/internal/domain"
 	"github.com/trunglq04/goride/shared/types"
-
-	"github.com/gin-gonic/gin"
 )
 
 type HttpHandler struct {
@@ -20,17 +19,21 @@ type previewTripRequest struct {
 	Destination types.Coordinate `json:"destination"`
 }
 
-func (h *HttpHandler) HandleTripPreview(c *gin.Context) {
+func (h *HttpHandler) HandleTripPreview(w http.ResponseWriter, r *http.Request) {
 	var reqBody previewTripRequest
-	if err := c.ShouldBindBodyWithJSON(&reqBody); err != nil {
-		c.JSON(http.StatusInternalServerError, "Failed to parse JSON data")
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode("Failed to parse JSON data")
 		return
 	}
 
-	t, err := h.Service.GetRoute(c, &reqBody.Pickup, &reqBody.Destination, true)
+	t, err := h.Service.GetRoute(r.Context(), &reqBody.Pickup, &reqBody.Destination, true)
 	if err != nil {
-		slog.ErrorContext(c.Request.Context(), "Failed to get route", "user_id", reqBody.UserID, "err", err)
+		slog.ErrorContext(r.Context(), "Failed to get route", "user_id", reqBody.UserID, "err", err)
 	}
 
-	c.JSON(http.StatusOK, t)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(t)
 }
